@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import httpx
@@ -9,6 +10,7 @@ from google.cloud import storage
 
 
 TIMEOUT_SECONDS = 10
+DEFAULT_WARMUP_BUCKET = os.environ.get("GCS_WARMUP_BUCKET", "").strip()
 
 
 class GcsClientError(RuntimeError):
@@ -33,8 +35,8 @@ except GcsClientError:
 def warmup() -> None:
     """Scalda la connessione HTTP verso GCS per rendere piu' veloce la prima chiamata."""
     try:
-        if _client is not None:
-            next(iter(_client.list_blobs("dataciviclab-clean", max_results=1)), None)
+        if _client is not None and DEFAULT_WARMUP_BUCKET:
+            next(iter(_client.list_blobs(DEFAULT_WARMUP_BUCKET, max_results=1)), None)
     except Exception:
         pass
 

@@ -59,12 +59,15 @@ Esempio locale da adattare al proprio ambiente:
 
 ```json
 "gcs": {
-  "command": "python",
-  "args": ["connectors/gcs/server.py"]
+  "command": "C:\\\\percorso\\\\al\\\\python.exe",
+  "args": ["C:\\\\percorso\\\\a\\\\lab-connectors\\\\connectors\\\\gcs\\\\server.py"],
+  "env": {
+    "GCS_WARMUP_BUCKET": "dataciviclab-clean"
+  }
 }
 ```
 
-Se vuoi usare un interprete specifico, cambia `command` in modo esplicito nel tuo file di config locale.
+Usa un path assoluto al `server.py`, non un path relativo, per evitare dipendenze dalla working directory del runner MCP.
 
 ## Test minimi
 
@@ -89,4 +92,4 @@ python -c "from connectors.gcs.gcs_client import check_public; print(check_publi
 ## Note operative
 
 - `gcs_check_public` usa `HEAD` e, se il server non lo supporta bene, fa fallback a `GET` con `Range: bytes=0-0`
-- il bucket `dataciviclab-clean` e' un caso d'uso del Lab, non una dipendenza hardcoded del connector
+- il warmup iniziale e' opzionale e si controlla con `GCS_WARMUP_BUCKET`

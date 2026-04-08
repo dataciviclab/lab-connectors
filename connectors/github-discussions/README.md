@@ -58,13 +58,15 @@ Esempio locale da adattare:
 
 ```json
 "github-discussions": {
-  "command": "python",
-  "args": ["connectors/github-discussions/server.py"],
+  "command": "C:\\\\percorso\\\\al\\\\python.exe",
+  "args": ["C:\\\\percorso\\\\a\\\\lab-connectors\\\\connectors\\\\github-discussions\\\\server.py"],
   "env": {
-    "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+    "GITHUB_TOKEN": "<token>"
   }
 }
 ```
+
+Usa un path assoluto al `server.py`, non un path relativo, per evitare dipendenze dalla working directory del runner MCP.
 
 ## Run manuale
 
