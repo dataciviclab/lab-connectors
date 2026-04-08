@@ -19,9 +19,15 @@ Non serve per:
 - tooling generico di stato locale
 - MCP `toolkit`
 
+Regola pratica:
+
+- se il codice e' un workflow, una skill o un playbook, sta altrove
+- se il codice e' introspezione o supporto diretto al motore `toolkit`, sta nel repo `toolkit`
+- se il codice e' un adapter leggero verso servizi esterni usati dal Lab, questo repo e' il posto giusto
+
 ## Scope iniziale
 
-I primi connettori attesi qui sono:
+I primi connettori presenti qui sono:
 
 - `gcs`
 - `github-discussions`
@@ -54,7 +60,7 @@ Lo scopo di questa fase e':
 - ripulire config e documentazione
 - decidere in seguito se aprire tutto o in parte
 
-## Struttura iniziale proposta
+## Struttura iniziale
 
 ```text
 connectors/
@@ -65,7 +71,7 @@ docs/
 
 ## Prossimi passi
 
-1. aggiungere i primi due connettori in forma privata
-2. rimuovere assunzioni su path locali e leakage di segreti
-3. documentare setup e gestione delle variabili ambiente
+1. consolidare boundary e convenzioni del repo mentre resta privato
+2. testare uso reale dei connector col team
+3. aggiungere eventuali adapter futuri solo se restano leggeri e coerenti col perimetro
 4. decidere piu' avanti se il repo deve restare privato o aprirsi
