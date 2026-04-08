@@ -1,60 +1,60 @@
 # lab-connectors
 
-Private DataCivicLab repository for small connectors and adapters that close workflow gaps across external services.
+Repository privato DataCivicLab per piccoli connettori e adapter che chiudono gap del workflow verso servizi esterni.
 
-This repo is intentionally narrow.
+Questo repo nasce con un perimetro stretto.
 
-It is for:
+Serve per:
 
-- small DCL-specific connectors
-- adapters around external services used in the Lab workflow
-- tools that are useful across repos but do not belong in `lab-ops`
-- code that is too operational to leave in `_local`, but not big enough to justify a dedicated repo per connector
+- piccoli connettori DCL-specifici
+- adapter verso servizi esterni usati nel workflow del Lab
+- tooling utile su piu' repo ma che non appartiene a `lab-ops`
+- codice troppo operativo per restare in `_local`, ma non abbastanza grande da giustificare un repo dedicato per ogni connettore
 
-It is not for:
+Non serve per:
 
-- canonical workflows
-- skills or playbooks
-- dataset pipeline logic
-- generic local state tooling
-- the `toolkit` MCP
+- workflow canonici
+- skill o playbook
+- logica core di pipeline dataset
+- tooling generico di stato locale
+- MCP `toolkit`
 
-## Initial scope
+## Scope iniziale
 
-The first connectors expected here are:
+I primi connettori attesi qui sono:
 
 - `gcs`
 - `github-discussions`
 
-Future wrappers for external MCPs such as `ckan` or `sdmx` may live here only if they remain thin DCL adapters and do not duplicate the upstream core.
+Eventuali wrapper futuri per MCP esterni come `ckan` o `sdmx` possono entrare qui solo se restano adapter leggeri del Lab e non duplicano il core upstream.
 
-## Repo boundary
+## Boundary del repo
 
-Use this repo for connectors that are:
+Questo repo e' il posto giusto per connettori che sono:
 
-- small
-- stable enough to be shared with the team
-- clearly useful in the Lab workflow
-- easier to maintain together than as separate tiny repos
+- piccoli
+- abbastanza stabili da essere condivisi col team
+- chiaramente utili nel workflow del Lab
+- piu' facili da mantenere insieme che come tanti repo minuscoli
 
-Keep out connectors that are:
+Questo repo non e' il posto giusto per connettori che sono:
 
-- strongly tied to personal state or local secrets
-- still experimental and not worth sharing yet
-- better treated as part of `toolkit`
+- troppo legati a stato personale o segreti locali
+- ancora troppo sperimentali per essere condivisi
+- piu' naturali come parte del repo `toolkit`
 
-## Private-first phase
+## Fase privata iniziale
 
-This repo starts private.
+Il repo parte privato.
 
-The purpose of the private phase is to:
+Lo scopo di questa fase e':
 
-- share the connectors with the team
-- test structure and setup
-- clean up config and docs
-- decide what, if anything, should later become public
+- condividere i connettori col team
+- testare struttura e setup
+- ripulire config e documentazione
+- decidere in seguito se aprire tutto o in parte
 
-## Proposed structure
+## Struttura iniziale proposta
 
 ```text
 connectors/
@@ -63,9 +63,9 @@ connectors/
 docs/
 ```
 
-## Next steps
+## Prossimi passi
 
-1. add the first two connectors in private form
-2. remove local path assumptions and secret leakage
-3. document setup and env handling
-4. decide later if the repo should stay private or be opened
+1. aggiungere i primi due connettori in forma privata
+2. rimuovere assunzioni su path locali e leakage di segreti
+3. documentare setup e gestione delle variabili ambiente
+4. decidere piu' avanti se il repo deve restare privato o aprirsi
