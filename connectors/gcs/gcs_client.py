@@ -41,17 +41,29 @@ def warmup() -> None:
         pass
 
 
-def list_objects(bucket: str, prefix: str | None = None) -> dict[str, Any]:
+def list_objects(
+    bucket: str,
+    prefix: str | None = None,
+    limit: int | None = None,
+    page_token: str | None = None,
+) -> dict[str, Any]:
     bucket_name = (bucket or "").strip()
     if not bucket_name:
         raise GcsClientError("bucket vuoto")
 
+    safe_limit = max(1, limit) if limit is not None else None
     safe_prefix = (prefix or "").strip() or None
     try:
         client = _client or _make_storage_client()
-        blobs = client.list_blobs(bucket_name, prefix=safe_prefix)
+        blobs_iter = client.list_blobs(bucket_name, prefix=safe_prefix)
+        if page_token:
+            blobs_iter.page_token = page_token
+        if safe_limit:
+            blobs_iter.max_results = safe_limit
+
         objects = []
-        for blob in blobs:
+        next_page_token = None
+        for blob in blobs_iter:
             objects.append(
                 {
                     "name": blob.name,
@@ -60,6 +72,15 @@ def list_objects(bucket: str, prefix: str | None = None) -> dict[str, Any]:
                     "public_url": f"https://storage.googleapis.com/{bucket_name}/{blob.name}",
                 }
             )
+            if safe_limit and len(objects) >= safe_limit:
+                break
+
+        # Check if there are more pages
+        try:
+            next_page_token = blobs_iter.next_page_token
+        except Exception:
+            pass
+
     except Forbidden as exc:
         raise GcsClientError(
             f"Accesso negato al bucket `{bucket_name}` con le ADC correnti."
@@ -69,12 +90,16 @@ def list_objects(bucket: str, prefix: str | None = None) -> dict[str, Any]:
     except GoogleAPICallError as exc:
         raise GcsClientError(f"Errore GCS su `{bucket_name}`: {exc}") from exc
 
-    return {
+    result = {
         "bucket": bucket_name,
         "prefix": safe_prefix,
         "count": len(objects),
         "objects": objects,
     }
+    if safe_limit is not None:
+        result["limit"] = safe_limit
+        result["next_page_token"] = next_page_token if next_page_token else None
+    return result
 
 
 def check_public(url: str) -> dict[str, Any]:

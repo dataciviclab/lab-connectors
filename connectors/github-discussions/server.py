@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +18,6 @@ from github_discussions_client import (
     get_discussion_comments as get_discussion_comments_impl,
     list_discussions as list_discussions_impl,
 )
-
 
 mcp = FastMCP(
     name="github-discussions",
@@ -49,13 +47,16 @@ def github_list_discussions(
 
 @mcp.tool(
     description=(
-        "Restituisce una GitHub Discussion completa, incluso il body intero. "
-        "Preferire github_get_discussion_summary quando basta un estratto."
+        "Restituisce una GitHub Discussion. "
+        "mode=summary restituisce solo un estratto del body (default excerpt_chars=500). "
+        "mode=full restituisce il body intero (default, backward compat)."
     ),
     structured_output=True,
 )
-def github_get_discussion(repo_full_name: str, number: int) -> dict[str, Any]:
-    return _guard(get_discussion_impl, repo_full_name, number)
+def github_get_discussion(
+    repo_full_name: str, number: int, mode: str = "full", excerpt_chars: int = 500
+) -> dict[str, Any]:
+    return _guard(get_discussion_impl, repo_full_name, number, mode, excerpt_chars)
 
 
 @mcp.tool(
@@ -69,13 +70,23 @@ def github_get_discussion_summary(
 
 
 @mcp.tool(
-    description="Restituisce commenti top-level e reply annidate di una GitHub Discussion.",
+    description=(
+        "Restituisce commenti top-level e reply annidate di una GitHub Discussion. "
+        "mode=summary tronca body a excerpt_chars (default 200). "
+        "mode=full restituisce body interi (default, backward compat)."
+    ),
     structured_output=True,
 )
 def github_get_discussion_comments(
-    repo_full_name: str, number: int, limit: int = 20
+    repo_full_name: str,
+    number: int,
+    limit: int = 20,
+    mode: str = "full",
+    excerpt_chars: int = 200,
 ) -> dict[str, Any]:
-    return _guard(get_discussion_comments_impl, repo_full_name, number, limit)
+    return _guard(
+        get_discussion_comments_impl, repo_full_name, number, limit, mode, excerpt_chars
+    )
 
 
 @mcp.tool(
