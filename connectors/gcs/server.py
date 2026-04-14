@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 import threading
 from typing import Any
@@ -16,6 +17,10 @@ from gcs_client import (
     list_objects as list_objects_impl,
     warmup as _warmup,
 )
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_local" / "mcp"))
+from mcp_telemetry import mcp_telemetry
+
 
 threading.Thread(target=_warmup, daemon=True).start()
 
@@ -42,6 +47,7 @@ def _guard(fn, *args, **kwargs) -> dict[str, Any]:
     ),
     structured_output=True,
 )
+@mcp_telemetry("gcs")
 def gcs_list_objects(
     bucket: str,
     prefix: str = "",
@@ -55,6 +61,7 @@ def gcs_list_objects(
     description="Verifica se un URL pubblico GCS e' raggiungibile.",
     structured_output=True,
 )
+@mcp_telemetry("gcs")
 def gcs_check_public(url: str) -> dict[str, Any]:
     return _guard(check_public_impl, url)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,10 @@ from github_discussions_client import (
     get_discussion_comments as get_discussion_comments_impl,
     list_discussions as list_discussions_impl,
 )
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_local" / "mcp"))
+from mcp_telemetry import mcp_telemetry
+
 
 mcp = FastMCP(
     name="github-discussions",
@@ -39,6 +44,7 @@ def _guard(fn, *args, **kwargs) -> dict[str, Any]:
     description="Elenca le GitHub Discussions di un repository, opzionalmente filtrate per categoria.",
     structured_output=True,
 )
+@mcp_telemetry("github-discussions")
 def github_list_discussions(
     repo_full_name: str, category_name: str | None = None, limit: int = 10
 ) -> dict[str, Any]:
@@ -53,6 +59,7 @@ def github_list_discussions(
     ),
     structured_output=True,
 )
+@mcp_telemetry("github-discussions")
 def github_get_discussion(
     repo_full_name: str, number: int, mode: str = "full", excerpt_chars: int = 500
 ) -> dict[str, Any]:
@@ -63,6 +70,7 @@ def github_get_discussion(
     description="Restituisce un riepilogo corto di una GitHub Discussion.",
     structured_output=True,
 )
+@mcp_telemetry("github-discussions")
 def github_get_discussion_summary(
     repo_full_name: str, number: int, excerpt_chars: int = 280
 ) -> dict[str, Any]:
@@ -77,6 +85,7 @@ def github_get_discussion_summary(
     ),
     structured_output=True,
 )
+@mcp_telemetry("github-discussions")
 def github_get_discussion_comments(
     repo_full_name: str,
     number: int,
@@ -93,6 +102,7 @@ def github_get_discussion_comments(
     description="Crea una GitHub Discussion in una categoria del repository.",
     structured_output=True,
 )
+@mcp_telemetry("github-discussions")
 def github_create_discussion(
     repo_full_name: str, category_name: str, title: str, body: str
 ) -> dict[str, Any]:
@@ -103,6 +113,7 @@ def github_create_discussion(
     description="Aggiunge un commento top-level a una GitHub Discussion.",
     structured_output=True,
 )
+@mcp_telemetry("github-discussions")
 def github_add_discussion_comment(
     repo_full_name: str, number: int, body: str
 ) -> dict[str, Any]:
