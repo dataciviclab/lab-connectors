@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 import threading
 from typing import Any
@@ -17,7 +16,6 @@ from gcs_client import (
     list_objects as list_objects_impl,
     warmup as _warmup,
 )
-
 
 threading.Thread(target=_warmup, daemon=True).start()
 
@@ -37,12 +35,26 @@ def _guard(fn, *args, **kwargs) -> dict[str, Any]:
         return {"error": str(exc)}
 
 
-@mcp.tool(description="Elenca oggetti in un bucket GCS con prefisso opzionale.", structured_output=True)
-def gcs_list_objects(bucket: str, prefix: str = "") -> dict[str, Any]:
-    return _guard(list_objects_impl, bucket, prefix or None)
+@mcp.tool(
+    description=(
+        "Elenca oggetti in un bucket GCS con prefisso opzionale. "
+        "limit e page_token sono opzionali: se non specificati, ritorna tutti i risultati (backward compat)."
+    ),
+    structured_output=True,
+)
+def gcs_list_objects(
+    bucket: str,
+    prefix: str = "",
+    limit: int | None = None,
+    page_token: str | None = None,
+) -> dict[str, Any]:
+    return _guard(list_objects_impl, bucket, prefix or None, limit, page_token)
 
 
-@mcp.tool(description="Verifica se un URL pubblico GCS e' raggiungibile.", structured_output=True)
+@mcp.tool(
+    description="Verifica se un URL pubblico GCS e' raggiungibile.",
+    structured_output=True,
+)
 def gcs_check_public(url: str) -> dict[str, Any]:
     return _guard(check_public_impl, url)
 

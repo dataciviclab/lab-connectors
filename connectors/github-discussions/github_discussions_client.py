@@ -100,19 +100,24 @@ def _discussion_node_to_summary(node: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _comment_node_to_dict(node: dict[str, Any]) -> dict[str, Any]:
+def _comment_node_to_dict(
+    node: dict[str, Any], max_body_chars: int | None = None
+) -> dict[str, Any]:
     replies = ((node.get("replies") or {}).get("nodes")) or []
+    body = node.get("body", "")
     return {
         "comment_id": node.get("id"),
         "author": ((node.get("author") or {}).get("login")),
-        "body": node.get("body", ""),
+        "body": body if max_body_chars is None else _excerpt(body, max_body_chars),
         "created_at": node.get("createdAt"),
         "reply_count": ((node.get("replies") or {}).get("totalCount")) or 0,
         "replies": [
             {
                 "reply_id": reply.get("id"),
                 "author": ((reply.get("author") or {}).get("login")),
-                "body": reply.get("body", ""),
+                "body": reply.get("body", "")
+                if max_body_chars is None
+                else _excerpt(reply.get("body", ""), max_body_chars),
                 "created_at": reply.get("createdAt"),
             }
             for reply in replies
@@ -127,7 +132,9 @@ def _excerpt(text: str, max_chars: int = 280) -> str:
     return compact[: max_chars - 1].rstrip() + "..."
 
 
-def _get_repository_and_categories(repo_full_name: str) -> tuple[str, list[dict[str, Any]]]:
+def _get_repository_and_categories(
+    repo_full_name: str,
+) -> tuple[str, list[dict[str, Any]]]:
     owner, name = _split_repo(repo_full_name)
     query = """
     query($owner:String!, $name:String!) {
@@ -196,7 +203,9 @@ def list_discussions(
     }
     """
     data = _graphql(query, {"owner": owner, "name": name, "limit": safe_limit})
-    nodes = (((data.get("repository") or {}).get("discussions") or {}).get("nodes")) or []
+    nodes = (
+        ((data.get("repository") or {}).get("discussions") or {}).get("nodes")
+    ) or []
     discussions = [_discussion_node_to_summary(node) for node in nodes]
 
     if category_name and category_name.strip():
@@ -216,7 +225,9 @@ def list_discussions(
     }
 
 
-def get_discussion(repo_full_name: str, number: int) -> dict[str, Any]:
+def get_discussion(
+    repo_full_name: str, number: int, mode: str = "full", excerpt_chars: int = 500
+) -> dict[str, Any]:
     owner, name = _split_repo(repo_full_name)
     query = """
     query($owner:String!, $name:String!, $number:Int!) {
@@ -243,18 +254,30 @@ def get_discussion(repo_full_name: str, number: int) -> dict[str, Any]:
         )
 
     category = discussion.get("category") or {}
-    return {
+    base = {
         "repo_full_name": repo_full_name,
         "discussion_id": discussion.get("id"),
         "number": discussion.get("number"),
         "title": discussion.get("title"),
         "url": discussion.get("url"),
-        "body": discussion.get("body", ""),
         "category": category.get("name"),
         "created_at": discussion.get("createdAt"),
         "updated_at": discussion.get("updatedAt"),
         "answer_chosen": bool(discussion.get("answerChosenAt")),
+        "mode": mode,
     }
+
+    safe_mode = mode if mode in ("full", "summary") else "full"
+    safe_excerpt = max(80, min(excerpt_chars, 2000))
+
+    if safe_mode == "summary":
+        body_text = discussion.get("body", "")
+        base["body_excerpt"] = _excerpt(body_text, safe_excerpt)
+        base["body_chars"] = len(body_text) if body_text else 0
+        base["excerpt_chars"] = safe_excerpt
+        return base
+
+    return {**base, "body": discussion.get("body", "")}
 
 
 def get_discussion_summary(
@@ -278,10 +301,16 @@ def get_discussion_summary(
 
 
 def get_discussion_comments(
-    repo_full_name: str, number: int, limit: int = 20
+    repo_full_name: str,
+    number: int,
+    limit: int = 20,
+    mode: str = "full",
+    excerpt_chars: int = 200,
 ) -> dict[str, Any]:
     owner, name = _split_repo(repo_full_name)
     safe_limit = max(1, min(limit, 50))
+    safe_mode = mode if mode in ("full", "summary") else "full"
+    safe_excerpt = max(80, min(excerpt_chars, 1000)) if safe_mode == "summary" else None
     query = """
     query($owner:String!, $name:String!, $number:Int!, $limit:Int!) {
       repository(owner:$owner, name:$name) {
@@ -320,11 +349,14 @@ def get_discussion_comments(
         )
     comments_payload = discussion.get("comments") or {}
     nodes = comments_payload.get("nodes") or []
-    comments = [_comment_node_to_dict(node) for node in nodes]
+    comments = [
+        _comment_node_to_dict(node, max_body_chars=safe_excerpt) for node in nodes
+    ]
     return {
         "repo_full_name": repo_full_name,
         "number": number,
         "limit": safe_limit,
+        "mode": safe_mode,
         "comment_count": len(comments),
         "total_comment_count": comments_payload.get("totalCount") or len(comments),
         "comments": comments,
@@ -348,7 +380,9 @@ def create_discussion(
         None,
     )
     if not category:
-        available = ", ".join(sorted(item.get("name", "") for item in categories if item.get("name")))
+        available = ", ".join(
+            sorted(item.get("name", "") for item in categories if item.get("name"))
+        )
         raise GitHubDiscussionsClientError(
             f"Categoria '{category_name}' non trovata in {repo_full_name}. "
             f"Categorie disponibili: {available}"
@@ -379,9 +413,11 @@ def create_discussion(
             "body": body.strip(),
         },
     )
-    discussion = (((data.get("createDiscussion") or {}).get("discussion")) or None)
+    discussion = ((data.get("createDiscussion") or {}).get("discussion")) or None
     if not discussion:
-        raise GitHubDiscussionsClientError("createDiscussion non ha restituito discussion")
+        raise GitHubDiscussionsClientError(
+            "createDiscussion non ha restituito discussion"
+        )
     return {
         "repo_full_name": repo_full_name,
         "number": discussion.get("number"),
@@ -389,7 +425,9 @@ def create_discussion(
     }
 
 
-def add_discussion_comment(repo_full_name: str, number: int, body: str) -> dict[str, Any]:
+def add_discussion_comment(
+    repo_full_name: str, number: int, body: str
+) -> dict[str, Any]:
     if not body.strip():
         raise GitHubDiscussionsClientError("body vuoto")
     discussion_id = _get_discussion_id(repo_full_name, number)
@@ -403,10 +441,8 @@ def add_discussion_comment(repo_full_name: str, number: int, body: str) -> dict[
       }
     }
     """
-    data = _graphql(
-        mutation, {"discussionId": discussion_id, "body": body.strip()}
-    )
-    comment = (((data.get("addDiscussionComment") or {}).get("comment")) or None)
+    data = _graphql(mutation, {"discussionId": discussion_id, "body": body.strip()})
+    comment = ((data.get("addDiscussionComment") or {}).get("comment")) or None
     if not comment:
         raise GitHubDiscussionsClientError(
             "addDiscussionComment non ha restituito comment"
