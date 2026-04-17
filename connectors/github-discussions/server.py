@@ -20,8 +20,15 @@ from github_discussions_client import (
     list_discussions as list_discussions_impl,
 )
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_local" / "mcp"))
-from mcp_telemetry import mcp_telemetry
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "_local" / "mcp"))
+    from mcp_telemetry import mcp_telemetry
+except Exception:
+    def mcp_telemetry(_connector_name: str):
+        def decorator(fn):
+            return fn
+
+        return decorator
 
 
 mcp = FastMCP(

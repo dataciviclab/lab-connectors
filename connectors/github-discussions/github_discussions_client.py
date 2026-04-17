@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
+from dotenv import load_dotenv
 
+# Load .env from workspace root when this repo is used inside the Lab workspace.
+load_dotenv(Path(__file__).resolve().parents[3] / ".env", override=False)
 
 API_URL = "https://api.github.com/graphql"
 TIMEOUT_SECONDS = 20
