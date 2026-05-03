@@ -1,6 +1,6 @@
 # Connector `gcs`
 
-Connector MCP read-only per ispezionare bucket Google Cloud Storage e verificare l'accessibilita' pubblica di URL GCS.
+Connector MCP read-only per ispezionare bucket Google Cloud Storage e verificare l'accessibilità pubblica di URL GCS.
 
 ## Tool esposti
 
@@ -92,4 +92,4 @@ python -c "from connectors.gcs.gcs_client import check_public; print(check_publi
 ## Note operative
 
 - `gcs_check_public` usa `HEAD` e, se il server non lo supporta bene, fa fallback a `GET` con `Range: bytes=0-0`
-- il warmup iniziale e' opzionale e si controlla con `GCS_WARMUP_BUCKET`
+- il warmup iniziale è opzionale e si controlla con `GCS_WARMUP_BUCKET`
