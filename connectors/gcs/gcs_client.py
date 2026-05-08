@@ -11,6 +11,7 @@ from google.cloud import storage
 
 TIMEOUT_SECONDS = 10
 DEFAULT_WARMUP_BUCKET = os.environ.get("GCS_WARMUP_BUCKET", "").strip()
+DEFAULT_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip() or None
 
 
 class GcsClientError(RuntimeError):
@@ -19,24 +20,22 @@ class GcsClientError(RuntimeError):
 
 def _make_storage_client() -> storage.Client:
     try:
-        return storage.Client()
+        return storage.Client(project=DEFAULT_PROJECT)
     except DefaultCredentialsError as exc:
         raise GcsClientError(
             "Application Default Credentials non trovate. Eseguire `gcloud auth application-default login`."
         ) from exc
 
 
-try:
-    _client = _make_storage_client()
-except GcsClientError:
-    _client = None
+_client: storage.Client | None = None
 
 
 def warmup() -> None:
     """Scalda la connessione HTTP verso GCS per rendere piu' veloce la prima chiamata."""
     try:
-        if _client is not None and DEFAULT_WARMUP_BUCKET:
-            next(iter(_client.list_blobs(DEFAULT_WARMUP_BUCKET, max_results=1)), None)
+        if DEFAULT_WARMUP_BUCKET:
+            client = _client or _make_storage_client()
+            next(iter(client.list_blobs(DEFAULT_WARMUP_BUCKET, max_results=1)), None)
     except Exception:
         pass
 
@@ -54,7 +53,10 @@ def list_objects(
     safe_limit = max(1, limit) if limit is not None else None
     safe_prefix = (prefix or "").strip() or None
     try:
-        client = _client or _make_storage_client()
+        global _client
+        if _client is None:
+            _client = _make_storage_client()
+        client = _client
         blobs_iter = client.list_blobs(bucket_name, prefix=safe_prefix)
         if page_token:
             blobs_iter.page_token = page_token
