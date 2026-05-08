@@ -34,6 +34,7 @@ extend-select = ["I", "UP", "B", "C4", "D", "E501"]
 "lab_connectors/__init__.py" = ["D104"]
 "lab_connectors/http/__init__.py" = ["D104"]
 "tests/**" = ["D"]
+"lab_connectors/http/types.py" = ["D105"]
 
 [tool.mypy]
 python_version = "3.12"

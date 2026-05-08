@@ -17,7 +17,7 @@ import requests
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 
-from lab_connectors.http.types import HttpResult
+from lab_connectors.http.types import HttpFallbackError, HttpResult
 
 logger = logging.getLogger("lab_connectors.http")
 
@@ -73,10 +73,12 @@ class HttpClient:
         kwargs.setdefault("allow_redirects", True)
         kwargs_no_headers = {k: v for k, v in kwargs.items() if k != "headers"}
 
+        primary_exc: requests.exceptions.SSLError | None = None
         try:
             response = requests.head(url, timeout=self.timeout, **kwargs)
             return HttpResult(response=response, err=None, ssl_fallback_used=None)
-        except requests.exceptions.SSLError:
+        except requests.exceptions.SSLError as exc:
+            primary_exc = exc
             logger.warning("SSL error on HEAD %s — fallback with verify=False", url)
             urllib3.disable_warnings(category=InsecureRequestWarning)
 
@@ -96,7 +98,9 @@ class HttpClient:
             logger.warning("Fallback HEAD also failed for %s: %s", url, fallback_exc)
             return HttpResult(
                 response=None,
-                err=fallback_exc,
+                err=HttpFallbackError(
+                    primary_error=primary_exc, fallback_error=fallback_exc
+                ),
                 ssl_fallback_used=False,
             )
         except Exception as exc:
@@ -119,6 +123,7 @@ class HttpClient:
         kwargs["headers"] = headers
 
         last_err: Exception | None = None
+        primary_exc: requests.exceptions.SSLError | None = None
 
         for attempt in range(max(1, self.max_retries)):
             try:
@@ -127,7 +132,8 @@ class HttpClient:
                     last_err = Exception(f"HTTP {response.status_code}")
                     continue
                 return HttpResult(response=response, err=None, ssl_fallback_used=None)
-            except requests.exceptions.SSLError:
+            except requests.exceptions.SSLError as exc:
+                primary_exc = exc
                 logger.warning("SSL error on GET %s (attempt %d) — fallback", url, attempt + 1)
                 urllib3.disable_warnings(category=InsecureRequestWarning)
 
@@ -141,7 +147,9 @@ class HttpClient:
                     logger.warning("Fallback GET also failed for %s: %s", url, fallback_exc)
                     return HttpResult(
                         response=None,
-                        err=fallback_exc,
+                        err=HttpFallbackError(
+                            primary_error=primary_exc, fallback_error=fallback_exc
+                        ),
                         ssl_fallback_used=False,
                     )
                 except Exception as exc:

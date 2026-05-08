@@ -5,6 +5,23 @@ from dataclasses import dataclass
 
 
 @dataclass
+class HttpFallbackError(Exception):
+    """Raised when both primary SSL attempt and fallback (verify=False) fail.
+
+    Preserves both errors for diagnostic purposes.
+    """
+
+    primary_error: Exception
+    fallback_error: Exception
+
+    def __str__(self) -> str:
+        return (
+            f"primary failed with {self.primary_error.__class__.__name__}; "
+            f"fallback failed with {self.fallback_error.__class__.__name__}"
+        )
+
+
+@dataclass
 class HttpResult:
     """Result of an HTTP request.
 
@@ -34,3 +51,12 @@ class HttpResult:
     def is_error(self) -> bool:
         """True if request completely failed."""
         return self.response is None and self.err is not None
+
+    @property
+    def is_ssl_fallback_failed(self) -> bool:
+        """True if both primary SSL and fallback failed."""
+        return (
+            self.err is not None
+            and self.ssl_fallback_used is False
+            and isinstance(self.err, HttpFallbackError)
+        )
