@@ -13,6 +13,7 @@ from lab_connectors.mcp import (
     create_mcp_server,
     get_mcp_logger,
     guard,
+    guard_timed,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "ArtifactBackend",
     "create_mcp_server",
     "guard",
+    "guard_timed",
 ]

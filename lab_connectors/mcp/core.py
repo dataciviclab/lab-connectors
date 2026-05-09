@@ -120,7 +120,10 @@ def guard_timed(
         Dict con risultato o errore.
 
     """
-    logger = get_mcp_logger(logger_name or tool_name)
+    # logger_name dovrebbe essere il nome del server, non del tool.
+    # Se non passato, usa il tool_name come fallback ma avvisa via log.
+    _log_name = logger_name or tool_name
+    logger = get_mcp_logger(_log_name)
     start = time.monotonic()
 
     try:

@@ -6,7 +6,7 @@ from lab_connectors.mcp.artifact import (
     ArtifactResult,
 )
 from lab_connectors.mcp.cache import CacheStats, TtlCache
-from lab_connectors.mcp.core import create_mcp_server, guard
+from lab_connectors.mcp.core import create_mcp_server, guard, guard_timed
 from lab_connectors.mcp.errors import ErrorCode, McpError
 from lab_connectors.mcp.logging import McpLogger, get_mcp_logger
 
@@ -22,4 +22,5 @@ __all__ = [
     "ArtifactBackend",
     "create_mcp_server",
     "guard",
+    "guard_timed",
 ]
