@@ -6,36 +6,45 @@ per verificare che il server MCP rispetti i contratti standard del Lab.
 
 Uso tipico in un consumer::
 
-    from lab_connectors.tests.mcp.contracts import (
+    from lab_connectors.mcp.contracts import (
         assert_valid_error_shape,
         assert_server_init,
         assert_error_code_taxonomy,
     )
 
     assert_server_init(mcp, "toolkit")
-    assert_valid_error_shape(gward(lambda: 1/0))
+    assert_valid_error_shape(guard(lambda: 1/0))
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from lab_connectors.mcp.errors import ErrorCode, McpError
+from lab_connectors.mcp.errors import ErrorCode
+
+
+# ── Cross-repo test markers ─────────────────────────────────────────────────
+# Questi marker sono registrati in pyproject.toml di ogni repo del Lab.
+# Documentazione: lab-ops/operations/test-policy.md
+
+CROSS_REPO_MARKERS: dict[str, str] = {
+    "contract": "public API, artifact format, CLI stable output",
+    "regression": "documented bug fix (requires issue/PR link in docstring)",
+    "pure_unit": "non-trivial pure logic (no side effects)",
+    "smoke": "end-to-end golden-path smoke only",
+}
+"""Marker pytest validi in tutti i repo del DataCivicLab.
+
+Ogni repo DEVE registrarli nel proprio pyproject.toml o pytest.ini.
+Puo aggiungere marker repo-specifici oltre a questi.
+"""
 
 
 # ── Init pattern ────────────────────────────────────────────────────────────
 
-_SERVER_CREATED_BY = object()
-
 
 def assert_server_init(mcp: Any, expected_name: str) -> None:
-    """Verifica che il server sia stato creato con create_mcp_server().
-
-    Controlli:
-    - ``mcp.name`` corrisponde a ``expected_name``
-    - ``mcp`` è un'istanza FastMCP (via ``type.__name__``)
-    - Ha tool registrati (almeno 1)
-    """
+    """Verifica che il server sia stato creato con create_mcp_server()."""
     assert mcp is not None, "mcp non deve essere None"
     assert mcp.name == expected_name, (
         f"mcp.name={mcp.name!r}, atteso {expected_name!r}"
@@ -46,7 +55,7 @@ def assert_server_init(mcp: Any, expected_name: str) -> None:
 
 
 def assert_tools_registered(mcp: Any, min_tools: int = 1) -> set[str]:
-    """Verifica che il server abbia almeno ``min_tools`` tool registrati.
+    """Verifica che il server abbia almeno min_tools tool registrati.
 
     Returns:
         Set dei nomi dei tool registrati.
@@ -64,35 +73,28 @@ def assert_tools_registered(mcp: Any, min_tools: int = 1) -> set[str]:
 
 
 def assert_valid_error_shape(result: dict[str, Any]) -> None:
-    """Verifica che un dict di errore MCP abbia la struttura canonica.
-
-    Un errore valido deve avere:
-    - ``error``: stringa, codice valido in ``ErrorCode``
-    - ``message``: stringa, spiegazione leggibile
+    """Verifica che un dict di errore MCP abbia error + message.
 
     Esempi validi::
 
         {"error": "artifact_not_found", "message": "File non trovato"}
         {"error": "unexpected_error", "message": "division by zero"}
     """
-    assert isinstance(result, dict), f"Risultato non è un dict: {type(result)}"
+    assert isinstance(result, dict), f"Risultato non e un dict: {type(result)}"
     assert "error" in result, f"Chiave 'error' mancante in: {result}"
     assert "message" in result, f"Chiave 'message' mancante in: {result}"
     assert isinstance(result["error"], str), (
-        f"error non è str: {type(result['error'])}"
+        f"error non e str: {type(result['error'])}"
     )
     assert isinstance(result["message"], str), (
-        f"message non è str: {type(result['message'])}"
+        f"message non e str: {type(result['message'])}"
     )
-    assert result["error"], f"error è vuoto: {result}"
-    assert result["message"], f"message è vuoto: {result}"
+    assert result["error"], f"error e vuoto: {result}"
+    assert result["message"], f"message e vuoto: {result}"
 
 
 def assert_error_code_taxonomy(result: dict[str, Any]) -> None:
-    """Verifica che l'error code sia un valore valido di ``ErrorCode``.
-
-    Fallisce se l'error code non è nella tassonomia ufficiale.
-    """
+    """Verifica che l'error code sia un valore valido di ErrorCode."""
     assert_valid_error_shape(result)
     valid_codes = {c.value for c in ErrorCode}
     assert result["error"] in valid_codes, (
@@ -107,11 +109,7 @@ def assert_error_code_taxonomy(result: dict[str, Any]) -> None:
 def assert_guard_error(
     fn, *args: Any, **kwargs: Any
 ) -> dict[str, Any]:
-    """Chiama ``fn`` tramite ``guard()`` e verifica errore.
-
-    Richiede che lab_connectors.mcp.guard sia importato nel chiamante.
-    La funzione deve sollevare un'eccezione — il test verifica che
-    ``guard()`` la trasformi in dict con errore strutturato.
+    """Chiama fn tramite guard() e verifica errore strutturato.
 
     Returns:
         Il dict di errore restituito da guard().
@@ -124,44 +122,28 @@ def assert_guard_error(
 
 
 def assert_success_shape(result: dict[str, Any]) -> None:
-    """Verifica che un risultato di successo abbia la struttura attesa.
-
-    I tool possono restituire:
-    - Un dict diretto (es. ``{"dataset": "...", "year": 2024}``)
-    - Un dict con chiave ``result`` (es. ``{"result": "stringa"}``)
-
-    Entrambi i casi sono validi.
-    """
+    """Verifica che un risultato di successo non contenga 'error'."""
     assert isinstance(result, dict), (
-        f"Risultato non è un dict: {type(result)}"
+        f"Risultato non e un dict: {type(result)}"
     )
-    # Se c'è 'error', non è un successo — fallisce
     assert "error" not in result, (
-        f"Risultato contiene 'error', ma è expected success: {result}"
+        f"Risultato contiene 'error', ma expected success: {result}"
     )
 
 
-# ── Guard pattern tester (combinato) ────────────────────────────────────────
-
-
-def assert_guard_behavior(fn_success, fn_error, *args, **kwargs) -> tuple[dict[str, Any], dict[str, Any]]:
+def assert_guard_behavior(
+    fn_success, fn_error, *args, **kwargs
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Test completo del pattern guard: successo e errore.
-
-    Args:
-        fn_success: callable che restituisce un dict di successo.
-        fn_error: callable che solleva un'eccezione.
-        *args, **kwargs: passati a entrambe le callable (se supportati).
 
     Returns:
         (success_result, error_result)
     """
     from lab_connectors.mcp import guard as lc_guard
 
-    # Test successo
     success = lc_guard(fn_success, *args, **kwargs)
     assert_success_shape(success)
 
-    # Test errore
     error = lc_guard(fn_error, *args, **kwargs)
     assert_valid_error_shape(error)
 

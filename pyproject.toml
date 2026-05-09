@@ -49,5 +49,9 @@ disallow_untyped_defs = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
+    "contract: public API, artifact format, CLI stable output",
+    "regression: documented bug fix (requires issue/PR link in docstring)",
+    "pure_unit: non-trivial pure logic (no side effects)",
+    "smoke: end-to-end golden-path smoke only",
     "gcs: test che richiede connettività GCS (skippato di default)",
 ]
