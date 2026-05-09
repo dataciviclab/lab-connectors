@@ -129,3 +129,23 @@ class TestArtifactResolverLocal:
         assert "uri" in d
         assert "age_hours" in d
         assert d["stale"] is False
+
+    def test_trailing_slash_in_gcs_prefix_is_stripped(self) -> None:
+        """Il gcs_prefix con trailing slash non deve produrre doppi slash negli URI."""
+        resolver = ArtifactResolver(
+            repo_root=self._repo_root,
+            gcs_prefix="gs://bucket/path/",  # trailing slash!
+            backend="local",
+        )
+        # Non possiamo testare l'URI GCS in modalità local, ma verifichiamo
+        # che la costruzione interna non abbia doppi slash
+        assert resolver._gcs_prefix == "gs://bucket/path"
+
+    def test_backend_gcs_without_prefix_raises(self) -> None:
+        """backend='gcs' senza gcs_prefix deve dare errore."""
+        with pytest.raises(McpError) as excinfo:
+            ArtifactResolver(
+                repo_root=self._repo_root,
+                backend="gcs",  # gcs_prefix mancante!
+            )
+        assert excinfo.value.code == ErrorCode.INVALID_PARAMS

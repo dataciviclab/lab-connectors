@@ -117,9 +117,14 @@ class ArtifactResolver:
     ) -> None:
         """Inizializza il resolver con root, backend e timeout."""
         self._repo_root = Path(repo_root).resolve()
-        self._gcs_prefix = gcs_prefix
+        self._gcs_prefix = gcs_prefix.rstrip("/") if gcs_prefix else None
         self._max_age_hours = max_age_hours
         self._backend = backend or _backend_from_env()
+        if self._backend == "gcs" and self._gcs_prefix is None:
+            raise McpError(
+                ErrorCode.INVALID_PARAMS,
+                "backend='gcs' richiede gcs_prefix, ma non è stato fornito",
+            )
         self._gcs_cache: TtlCache[str, bytes] = TtlCache(ttl_seconds=600)
         self._gcs_timeout = gcs_timeout
 
