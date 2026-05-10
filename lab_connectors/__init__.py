@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from lab_connectors.http import HttpClient, HttpFallbackError, HttpResult
 from lab_connectors.mcp import (
-    ArtifactBackend,
-    ArtifactResolver,
-    ArtifactResult,
     CacheStats,
     ErrorCode,
     McpError,
@@ -26,9 +23,6 @@ __all__ = [
     "get_mcp_logger",
     "TtlCache",
     "CacheStats",
-    "ArtifactResult",
-    "ArtifactResolver",
-    "ArtifactBackend",
     "create_mcp_server",
     "guard",
     "guard_timed",
