@@ -1,8 +1,33 @@
 """Tests per lab_connectors.mcp.core."""
 from __future__ import annotations
 
-from lab_connectors.mcp.core import guard, guard_timed
+from lab_connectors.mcp.core import create_mcp_server, guard, guard_timed
 from lab_connectors.mcp.errors import ErrorCode, McpError
+
+
+class TestCreateMcpServer:
+    def test_creates_fastmcp_with_name(self) -> None:
+        """create_mcp_server deve restituire un FastMCP con nome corretto."""
+        mcp = create_mcp_server("test-server", "Test instructions")
+        assert mcp.name == "test-server"
+        assert type(mcp).__name__ == "FastMCP"
+
+    def test_creates_fastmcp_with_instructions(self) -> None:
+        """Le instructions devono essere accessibili."""
+        mcp = create_mcp_server("test", "Istruzioni di test")
+        assert "Istruzioni di test" in mcp.instructions
+
+    def test_fastmcp_tools_can_be_registered(self) -> None:
+        """Il server deve supportare la registrazione di strumenti."""
+        mcp = create_mcp_server("test-tools", "Test tools")
+
+        @mcp.tool(description="test tool")
+        def my_tool(x: int) -> str:
+            return str(x * 2)
+
+        tools = {t if isinstance(t, str) else t.name for t in mcp._tool_manager._tools}
+        assert "my_tool" in tools
+
 
 
 class TestGuard:

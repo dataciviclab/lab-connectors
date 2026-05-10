@@ -1,8 +1,8 @@
-"""Logging strutturato per server MCP.
+"""Logger uniforme per server MCP.
 
-Fornisce un McpLogger che produce log JSON strutturati con metadati
-(server, tool, duration_ms, cache_source, error_code) consumabili
-da sistemi di observability e debug degli agenti.
+Fornisce un McpLogger che produce log con metadati strutturati
+(server, tool, duration_ms, cache_source, error_code) passati come
+keyword arguments. Utile per debug degli agenti e osservabilita.
 """
 
 from __future__ import annotations
