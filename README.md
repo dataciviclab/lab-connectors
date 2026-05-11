@@ -112,6 +112,37 @@ stats = cache.stats               # entries, oldest_age, ttl
 
 ---
 
+### `lab_connectors.gcs`
+
+Client GCS unificato per operazioni di list, upload e verifica. Supporta 3 modalità:
+
+- `auth=None` (default): prova SDK `google.cloud.storage`, fallback HTTP API pubblica
+- `auth=True`: richiede SDK autenticato, fallisce con `RuntimeError` se non disponibile
+- `auth=False`: solo HTTP API, nessuna dipendenza SDK
+
+```python
+from lab_connectors.gcs import list_objects, object_exists, upload_file
+
+# List public bucket (HTTP API)
+results = list_objects("dataciviclab-clean", prefix="ispra/", auth=False)
+
+# Check if object exists (HEAD)
+exists = object_exists("dataciviclab-clean", "ispra_ru_base/2024/file.parquet")
+
+# Upload (requires auth)
+upload_file("/tmp/file.parquet", "dataciviclab-clean", "slug/2024/file.parquet")
+```
+
+#### Requisiti
+
+```bash
+pip install lab-connectors[gcs]
+```
+
+La modalità `auth=False` e `object_exists()` non richiedono il SDK — funzionano con sole librerie stdlib.
+
+---
+
 ## Installazione
 
 ```bash
