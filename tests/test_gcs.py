@@ -113,6 +113,15 @@ class GcsUploadTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             upload_file("/tmp/test.parquet", "bucket", "path/test.parquet")
 
+    @patch("lab_connectors.gcs.client._get_storage_client")
+    def test_list_auth_true_no_sdk_raises(self, mock_get_client) -> None:
+        """auth=True senza SDK deve fallire, non degradare a HTTP."""
+        mock_get_client.return_value = None
+        from lab_connectors.gcs import list_objects
+
+        with self.assertRaises(RuntimeError):
+            list_objects("test-bucket", auth=True)
+
 
 if __name__ == "__main__":
     unittest.main()

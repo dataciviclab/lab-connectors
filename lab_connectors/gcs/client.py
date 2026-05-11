@@ -106,7 +106,7 @@ def list_objects(
     page_token: str | None = None,
     auth: bool | None = None,
 ) -> list[dict[str, Any]]:
-    """List oggetti in un bucket GCS, con paginazione.
+    """List oggetti in un bucket GCS.
 
     Args:
         bucket: Nome bucket.
@@ -118,11 +118,18 @@ def list_objects(
     Returns:
         Lista di dict con chiavi name, size, updated.
 
-    """
-    client = _get_storage_client() if auth is not False else None
+    Raises:
+        RuntimeError: Se auth=True ma SDK/creds non disponibili.
 
-    if client is not None and auth is not False:
-        # SDK path
+    """
+    # auth=True richiede SDK — mai fallback HTTP
+    if auth is True:
+        client = _get_storage_client()
+        if client is None:
+            raise RuntimeError(
+                "auth=True ma google.cloud.storage non disponibile "
+                "o credenziali mancanti."
+            )
         from google.cloud.storage.retry import DEFAULT_RETRY
 
         blobs = list(
@@ -143,16 +150,63 @@ def list_objects(
             for b in blobs
         ]
 
-    # HTTP API path (fallback o forzato)
-    items, _ = _gcs_http_list(bucket, prefix, limit, page_token)
-    return [
-        {
-            "name": item["name"],
-            "size": int(item.get("size", 0)),
-            "updated": item.get("updated"),
-        }
-        for item in items
-    ]
+    # auth=False: solo HTTP API, niente SDK
+    if auth is False:
+        items, _ = _gcs_http_list(bucket, prefix, limit, page_token)
+        return [
+            {
+                "name": item["name"],
+                "size": int(item.get("size", 0)),
+                "updated": item.get("updated"),
+            }
+            for item in items
+        ]
+
+    # auth=None (auto): prova SDK, fallback HTTP con paginazione completa
+    client = _get_storage_client()
+    if client is not None:
+        from google.cloud.storage.retry import DEFAULT_RETRY
+
+        blobs = list(
+            client.list_blobs(
+                bucket,
+                prefix=prefix,
+                max_results=limit,
+                page_token=page_token,
+                retry=DEFAULT_RETRY,
+            )
+        )
+        return [
+            {
+                "name": b.name,
+                "size": b.size,
+                "updated": b.updated.isoformat() if b.updated else None,
+            }
+            for b in blobs
+        ]
+
+    # Fallback HTTP con paginazione
+    all_items: list[dict[str, Any]] = []
+    token = page_token
+    remaining = limit
+    while True:
+        page_limit = min(remaining, 1000) if remaining is not None else None
+        items, next_token = _gcs_http_list(bucket, prefix, page_limit, token)
+        for item in items:
+            all_items.append({
+                "name": item["name"],
+                "size": int(item.get("size", 0)),
+                "updated": item.get("updated"),
+            })
+            if remaining is not None:
+                remaining -= 1
+                if remaining <= 0:
+                    return all_items
+        if not next_token:
+            break
+        token = next_token
+
+    return all_items
 
 
 def object_exists(bucket: str, key: str) -> bool:
