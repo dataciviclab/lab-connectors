@@ -36,7 +36,7 @@ def _get_storage_client(project: str = "dataciviclab") -> Any | None:
         return _GCS_CLIENT
 
     try:
-        from google.cloud import storage
+        from google.cloud import storage  # type: ignore[import-not-found]
     except ImportError:
         _GCS_AUTH_MODE = "http"
         return None
@@ -130,7 +130,7 @@ def list_objects(
                 "auth=True ma google.cloud.storage non disponibile "
                 "o credenziali mancanti."
             )
-        from google.cloud.storage.retry import DEFAULT_RETRY
+        from google.cloud.storage.retry import DEFAULT_RETRY  # type: ignore[import-not-found]
 
         blobs = list(
             client.list_blobs(
