@@ -2,7 +2,8 @@
 
 Package Python condiviso per i repo del DataCivicLab.
 
-Contiene infrastruttura riusata da piu repo: HTTP client e MCP server core.
+Contiene infrastruttura riusata da piu repo: HTTP client, MCP server core,
+client GCS e context manager DuckDB.
 
 ---
 
@@ -143,6 +144,34 @@ La modalità `auth=False` e `object_exists()` non richiedono il SDK — funziona
 
 ---
 
+### `lab_connectors.duckdb`
+
+Context manager per connessioni DuckDB. Elimina il pattern
+``duckdb.connect()`` + ``try/finally`` + ``con.close()``.
+
+```python
+from lab_connectors.duckdb import safe_connect
+
+with safe_connect(":memory:", tool_name="my_tool") as con:
+    result = con.execute("SELECT 1 AS x").fetchall()
+```
+
+Se ``tool_name`` è specificato e l'extra ``[mcp]`` è installato, il logging
+usa ``McpLogger`` strutturato e gli errori DuckDB vengono avvolti in
+``McpError(DUCKDB_ERROR)``. Altrimenti logga via stdlib e propaga
+l'eccezione originale.
+
+#### Requisiti
+
+```bash
+pip install lab-connectors[duckdb]
+```
+
+Il supporto opzionale ``[mcp]`` (logging strutturato + error wrapping)
+richiede ``pip install lab-connectors[duckdb,mcp]``.
+
+---
+
 ## Installazione
 
 ```bash
@@ -152,9 +181,11 @@ pip install lab-connectors
 # Con MCP core
 pip install lab-connectors[mcp]
 
-# Sviluppo locale
-pip install -e ".[dev]"
-pip install -e ".[dev,mcp]"  # con tutto
+# Con DuckDB safe_connect
+pip install lab-connectors[duckdb]
+
+# Sviluppo locale (tutto)
+pip install -e ".[dev,mcp,gcs,duckdb]"
 ```
 
 ## Test

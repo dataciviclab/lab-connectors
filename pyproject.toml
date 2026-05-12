@@ -23,6 +23,9 @@ mcp = [
 gcs = [
     "google-cloud-storage>=2.19.0",
 ]
+duckdb = [
+    "duckdb>=1.0.0",
+]
 dev = [
     "ruff>=0.8.0",
     "mypy>=1.10.0",
@@ -42,6 +45,7 @@ ignore = ["D203", "D213"]
 "lab_connectors/http/__init__.py" = ["D104"]
 "lab_connectors/mcp/__init__.py" = ["D104"]
 "lab_connectors/gcs/__init__.py" = ["D104"]
+"lab_connectors/duckdb/__init__.py" = ["D104"]
 "tests/**" = ["D"]
 "lab_connectors/http/types.py" = ["D105"]
 
