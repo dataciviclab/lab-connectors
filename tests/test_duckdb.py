@@ -64,21 +64,25 @@ class TestSafeConnectErrors:
             with safe_connect("/nonexistent/dir/db.duckdb"):
                 pass
 
+    @patch("lab_connectors.duckdb.core._MCP_ERROR", None)
+    @patch("lab_connectors.duckdb.core._ERROR_CODE_DUCKDB", None)
     def test_query_error_propagates(self) -> None:
-        """Errore SQL propaga eccezione."""
+        """Errore SQL propaga eccezione (senza MCP)."""
         with pytest.raises(duckdb.CatalogException, match="Catalog Error"):
             with safe_connect(":memory:") as con:
                 con.execute("SELECT * FROM nonexistent_table").fetchall()
 
+    @patch("lab_connectors.duckdb.core._MCP_ERROR", None)
+    @patch("lab_connectors.duckdb.core._ERROR_CODE_DUCKDB", None)
     def test_error_closes_connection(self) -> None:
-        """Errore nel context manager chiude comunque la connessione."""
+        """Errore nel context manager chiude comunque la connessione (senza MCP)."""
         con_ref = None
-        with pytest.raises(duckdb.CatalogException):
+        with pytest.raises(duckdb.ParserException):
             with safe_connect(":memory:") as con:
                 con_ref = con
                 con.execute("INVALID SQL")
         # La connessione deve essere chiusa
-        with pytest.raises(duckdb.InvalidInputException):
+        with pytest.raises(duckdb.ConnectionException):
             con_ref.execute("SELECT 1")
 
 
@@ -103,15 +107,24 @@ class TestSafeConnectMcp:
 
     def test_mcp_error_logged_on_failure(self) -> None:
         """Con mcp attivo, errore viene loggato via McpLogger."""
+
+        class _FakeMcpError(RuntimeError):
+            """Fake McpError che accetta (code, message) come McpError reale."""
+
+            def __init__(self, code: str, message: str) -> None:
+                super().__init__(f"[{code}] {message}")
+                self.code = code
+                self.message = message
+
         mock_logger = MagicMock()
         mock_get_logger = MagicMock(return_value=mock_logger)
 
         with patch(
             "lab_connectors.duckdb.core._MCP_LOGGER", mock_get_logger
-        ), patch("lab_connectors.duckdb.core._MCP_ERROR", RuntimeError), patch(
+        ), patch("lab_connectors.duckdb.core._MCP_ERROR", _FakeMcpError), patch(
             "lab_connectors.duckdb.core._ERROR_CODE_DUCKDB", "duckdb_error"
         ):
-            with pytest.raises(RuntimeError):
+            with pytest.raises(_FakeMcpError):
                 with safe_connect(":memory:", tool_name="fail_tool") as con:
                     con.execute("INVALID")
 
