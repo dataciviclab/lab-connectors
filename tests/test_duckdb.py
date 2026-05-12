@@ -1,9 +1,16 @@
-"""Tests per lab_connectors.duckdb."""
+# ruff: noqa: E402, I001
+"""Tests per lab_connectors.duckdb.
+
+``duckdb`` è extra opzionale ``[duckdb]`` — se non installato,
+``pytest.importorskip`` salta tutti i test del modulo.
+"""
 from __future__ import annotations
 
-import duckdb
 import pytest
 
+pytest.importorskip("duckdb")
+
+import duckdb
 from lab_connectors.duckdb import safe_connect
 
 
