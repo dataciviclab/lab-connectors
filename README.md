@@ -13,14 +13,21 @@ client GCS e context manager DuckDB.
 
 HTTP client con SSL fallback, retry e timeout. Pattern canonico del Lab.
 
+Supporta `get()`, `head()` (con retry) e `post()` (retry opt-in).
+
 ```python
 from lab_connectors.http import HttpClient, HttpResult
 
 client = HttpClient(timeout=15)
-result = client.get("https://www.dati.salute.gov.it/sitemap-0.xml")
 
+# GET con retry e SSL fallback
+result = client.get("https://www.dati.salute.gov.it/sitemap-0.xml")
 assert result.is_ok                  # True se usable
 assert result.ssl_fallback_used is None  # SSL primario ok
+
+# POST (retry opt-in per idempotenza)
+result = client.post("https://example.com/download", data={"id": "123"})
+result = client.post("https://example.com/api", json={"query": "..."})
 ```
 
 ---

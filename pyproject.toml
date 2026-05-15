@@ -62,4 +62,5 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 markers = [
     "gcs: test che richiede connettività GCS (skippato di default)",
+    "policy: regola non ovvia o comportamento cross-component",
 ]
