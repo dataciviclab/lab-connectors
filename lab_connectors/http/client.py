@@ -204,9 +204,6 @@ class HttpClient:
         headers["User-Agent"] = self.user_agent
         kwargs["headers"] = headers
 
-        # Pop verify if caller passed it — SSL fallback path sets it explicitly
-        kwargs.pop("verify", None)
-
         effective_retries = max(1, retries)
         last_err: Exception | None = None
         primary_exc: requests.exceptions.SSLError | None = None
@@ -227,7 +224,11 @@ class HttpClient:
                 )
                 urllib3.disable_warnings(category=InsecureRequestWarning)
 
-                # SSL fallback attempt
+                # SSL fallback attempt — strip verify from kwargs if caller
+                # provided it (fallback always uses verify=False)
+                fallback_kwargs = {
+                    k: v for k, v in kwargs.items() if k != "verify"
+                }
                 try:
                     with requests.Session() as session:
                         session.headers.update({"User-Agent": self.user_agent})
@@ -237,7 +238,7 @@ class HttpClient:
                             json=json,
                             timeout=self.timeout,
                             verify=False,
-                            **kwargs,
+                            **fallback_kwargs,
                         )
                     return HttpResult(response=response, err=None, ssl_fallback_used=True)
                 except requests.exceptions.RequestException as fallback_exc:

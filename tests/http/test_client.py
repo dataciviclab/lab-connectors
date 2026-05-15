@@ -137,8 +137,8 @@ def test_post_retry(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.policy
-def test_post_verify_kwarg_stripped(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Caller-provided verify= is stripped so SSL fallback path is not broken."""
+def test_post_verify_passed_to_primary(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Caller-provided verify= is forwarded to primary requests.post()."""
     calls: list[dict[str, Any]] = []
 
     def fake_post(url: str, **kwargs: Any) -> _FakeResponse:
@@ -148,12 +148,41 @@ def test_post_verify_kwarg_stripped(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(requests, "post", fake_post)
 
     client = HttpClient()
-    # Caller passes verify=True — must not collide with fallback verify=False
+    result = client.post("https://example.test/api", verify=False)
+
+    assert result.is_ok
+    # verify must appear in kwargs forwarded to requests.post
+    assert calls[0].get("verify") is False
+
+
+@pytest.mark.policy
+def test_post_verify_collision_free_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Caller verify= does not collide when SSL fallback triggers."""
+    # Use the existing SSL fallback success test but with verify=True
+    attempts: list[dict[str, Any]] = []
+
+    def fake_post(url: str, **kwargs: Any) -> _FakeResponse:
+        attempts.append(kwargs)
+        # Simulate SSL error when verify is not explicitly False
+        if kwargs.get("verify", True) is not False:
+            raise requests.exceptions.SSLError("certificate verify failed")
+        return _FakeResponse(200, b"ok")
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    monkeypatch.setattr(
+        requests.Session, "post", lambda self, *a, **kw: fake_post(*a, **kw)
+    )
+
+    client = HttpClient()
+    # Caller passes verify=True — does NOT collide with fallback verify=False
     result = client.post("https://example.test/api", verify=True)
 
     assert result.is_ok
-    # verify should NOT appear in kwargs forwarded to requests.post
-    assert "verify" not in calls[0]
+    # Primary call forwarded verify=True to requests.post
+    assert any(a.get("verify") is True for a in attempts)
+    # Fallback reached without TypeError
+    assert any(a.get("verify") is False for a in attempts)
+    assert result.ssl_fallback_used is True
 
 
 # ---------------------------------------------------------------------------
