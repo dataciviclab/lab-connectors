@@ -5,7 +5,7 @@ It wraps requests with:
 - SSL fallback (verify=False on SSLError)
 - Configurable timeout
 - User-Agent
-- HEAD and GET methods
+- HEAD, GET and POST methods
 - HttpResult return type (no exceptions raised on HTTP errors)
 """
 from __future__ import annotations
@@ -32,6 +32,9 @@ class HttpClient:
             print(result.response.status_code)
         else:
             print(f"Failed: {result.err}")
+
+        # POST is also supported (same SSL fallback + retry pattern)
+        result = client.post("https://example.com/api", data={"key": "value"})
     """
 
     DEFAULT_TIMEOUT_SECONDS = 60
@@ -145,6 +148,97 @@ class HttpClient:
                     return HttpResult(response=response, err=None, ssl_fallback_used=True)
                 except requests.exceptions.RequestException as fallback_exc:
                     logger.warning("Fallback GET also failed for %s: %s", url, fallback_exc)
+                    return HttpResult(
+                        response=None,
+                        err=HttpFallbackError(
+                            primary_error=primary_exc, fallback_error=fallback_exc
+                        ),
+                        ssl_fallback_used=False,
+                    )
+                except Exception as exc:
+                    return HttpResult(response=None, err=exc, ssl_fallback_used=False)
+
+            except requests.exceptions.RequestException as exc:
+                last_err = exc
+                if attempt < self.max_retries - 1:
+                    continue
+                return HttpResult(response=None, err=exc, ssl_fallback_used=False)
+            except Exception as exc:
+                return HttpResult(response=None, err=exc, ssl_fallback_used=False)
+
+        return HttpResult(
+            response=None,
+            err=last_err or Exception("Max retries exhausted"),
+            ssl_fallback_used=False,
+        )
+
+    def post(
+        self,
+        url: str,
+        data: Any = None,
+        json: Any = None,
+        **kwargs: Any,
+    ) -> HttpResult:
+        """Send POST request with SSL fallback and retry.
+
+        Follows the same retry and SSL fallback pattern as :meth:`get`.
+
+        .. caution::
+           Retry on POST is safe only for **idempotent** endpoints
+           (download, query, search). For state-mutating endpoints,
+           pass ``max_retries=0`` to the client constructor.
+
+        Args:
+            url: The URL to request.
+            data: Form-encoded body (passed as ``data`` to ``requests.post``).
+            json: JSON-serializable body (passed as ``json`` to ``requests.post``).
+            **kwargs: Passed to ``requests.post()``.
+
+        Returns:
+            HttpResult with response or err. On SSL fallback success,
+            ssl_fallback_used=True.
+
+        """
+        headers = kwargs.pop("headers", None) or {}
+        headers["User-Agent"] = self.user_agent
+        kwargs["headers"] = headers
+
+        last_err: Exception | None = None
+        primary_exc: requests.exceptions.SSLError | None = None
+
+        for attempt in range(max(1, self.max_retries)):
+            try:
+                response = requests.post(
+                    url, data=data, json=json, timeout=self.timeout, **kwargs
+                )
+                if response.status_code >= 500 and attempt < self.max_retries - 1:
+                    last_err = Exception(f"HTTP {response.status_code}")
+                    continue
+                return HttpResult(response=response, err=None, ssl_fallback_used=None)
+            except requests.exceptions.SSLError as exc:
+                primary_exc = exc
+                logger.warning(
+                    "SSL error on POST %s (attempt %d) — fallback", url, attempt + 1
+                )
+                urllib3.disable_warnings(category=InsecureRequestWarning)
+
+                # SSL fallback attempt
+                try:
+                    with requests.Session() as session:
+                        session.headers.update({"User-Agent": self.user_agent})
+                        response = session.post(
+                            url,
+                            data=data,
+                            json=json,
+                            timeout=self.timeout,
+                            verify=False,
+                            **kwargs,
+                        )
+                    return HttpResult(response=response, err=None, ssl_fallback_used=True)
+                except requests.exceptions.RequestException as fallback_exc:
+                    logger.warning(
+                        "Fallback POST also failed for %s: %s", url, fallback_exc
+                    )
                     return HttpResult(
                         response=None,
                         err=HttpFallbackError(
