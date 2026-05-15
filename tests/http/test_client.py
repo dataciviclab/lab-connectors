@@ -111,7 +111,7 @@ def test_post_errors(
 
 
 def test_post_retry(monkeypatch: pytest.MonkeyPatch) -> None:
-    """5xx triggers retry; succeeds after transient failure."""
+    """Retry opt-in: 5xx triggers retry only when retries>0."""
     attempts: list[int] = []
 
     def fake_post(url: str, **kwargs: Any) -> _FakeResponse:
@@ -122,13 +122,38 @@ def test_post_retry(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(requests, "post", fake_post)
 
-    client = HttpClient(max_retries=2)
-    result = client.post("https://example.test/retry")
+    client = HttpClient()
+    result = client.post("https://example.test/retry", retries=2)
 
     assert result.is_ok
     assert result.response is not None
     assert result.response.content == b"ok-after-retry"
     assert len(attempts) == 2
+
+
+# ---------------------------------------------------------------------------
+# post() — caller-provided verify kwarg
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.policy
+def test_post_verify_kwarg_stripped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Caller-provided verify= is stripped so SSL fallback path is not broken."""
+    calls: list[dict[str, Any]] = []
+
+    def fake_post(url: str, **kwargs: Any) -> _FakeResponse:
+        calls.append(kwargs)
+        return _FakeResponse(200, b"ok")
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    client = HttpClient()
+    # Caller passes verify=True — must not collide with fallback verify=False
+    result = client.post("https://example.test/api", verify=True)
+
+    assert result.is_ok
+    # verify should NOT appear in kwargs forwarded to requests.post
+    assert "verify" not in calls[0]
 
 
 # ---------------------------------------------------------------------------

@@ -177,21 +177,22 @@ class HttpClient:
         url: str,
         data: Any = None,
         json: Any = None,
+        *,
+        retries: int = 0,
         **kwargs: Any,
     ) -> HttpResult:
-        """Send POST request with SSL fallback and retry.
+        """Send POST request with SSL fallback (opt-in retry).
 
-        Follows the same retry and SSL fallback pattern as :meth:`get`.
-
-        .. caution::
-           Retry on POST is safe only for **idempotent** endpoints
-           (download, query, search). For state-mutating endpoints,
-           pass ``max_retries=0`` to the client constructor.
+        Unlike :meth:`get`, retry is **opt-in** (default 0) because POST
+        is not idempotent. Pass ``retries=N`` for idempotent endpoints
+        (file download, SPARQL query).
 
         Args:
             url: The URL to request.
             data: Form-encoded body (passed as ``data`` to ``requests.post``).
             json: JSON-serializable body (passed as ``json`` to ``requests.post``).
+            retries: Number of retry attempts (default 0 — no retry).
+                     Effective only for 5xx and transient connection errors.
             **kwargs: Passed to ``requests.post()``.
 
         Returns:
@@ -203,15 +204,19 @@ class HttpClient:
         headers["User-Agent"] = self.user_agent
         kwargs["headers"] = headers
 
+        # Pop verify if caller passed it — SSL fallback path sets it explicitly
+        kwargs.pop("verify", None)
+
+        effective_retries = max(1, retries)
         last_err: Exception | None = None
         primary_exc: requests.exceptions.SSLError | None = None
 
-        for attempt in range(max(1, self.max_retries)):
+        for attempt in range(effective_retries):
             try:
                 response = requests.post(
                     url, data=data, json=json, timeout=self.timeout, **kwargs
                 )
-                if response.status_code >= 500 and attempt < self.max_retries - 1:
+                if response.status_code >= 500 and attempt < effective_retries - 1:
                     last_err = Exception(f"HTTP {response.status_code}")
                     continue
                 return HttpResult(response=response, err=None, ssl_fallback_used=None)
@@ -251,7 +256,7 @@ class HttpClient:
 
             except requests.exceptions.RequestException as exc:
                 last_err = exc
-                if attempt < self.max_retries - 1:
+                if attempt < effective_retries - 1:
                     continue
                 return HttpResult(response=None, err=exc, ssl_fallback_used=False)
             except Exception as exc:
