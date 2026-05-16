@@ -56,8 +56,9 @@ class HttpClient:
 
         Args:
             timeout: Request timeout in seconds.
-            max_retries: Number of retries on transient errors (5xx, 429,
-                connection errors). Default 2 (3 total attempts).
+            max_retries: Number of attempts on transient errors (5xx, 429,
+                connection errors). Default 2 (2 total attempts: try once,
+                retry once on failure).
             retry_backoff: Base delay in seconds for exponential backoff.
                 Actual delay = backoff * 2^(attempt-1). Default 1.0.
             user_agent: Custom User-Agent string.
@@ -87,6 +88,7 @@ class HttpClient:
 
         Returns:
             HttpResult with response or err.
+
         """
         headers = kwargs.pop("headers", None) or {}
         headers["User-Agent"] = self.user_agent
@@ -121,7 +123,7 @@ class HttpClient:
                 retry_after = self._parse_retry_after(response)
                 if retry_after is not None:
                     time.sleep(min(retry_after, 300))
-                last_err = Exception(f"HTTP 429")
+                last_err = Exception("HTTP 429")
                 continue
 
             # 5xx retry
@@ -184,6 +186,7 @@ class HttpClient:
 
         Returns:
             HttpResult with response or err.
+
         """
         headers = kwargs.pop("headers", None) or {}
         headers["User-Agent"] = self.user_agent
@@ -220,7 +223,7 @@ class HttpClient:
                 retry_after = self._parse_retry_after(response)
                 if retry_after is not None:
                     time.sleep(min(retry_after, 300))
-                last_err = Exception(f"HTTP 429")
+                last_err = Exception("HTTP 429")
                 continue
 
             # 5xx retry
@@ -292,6 +295,7 @@ class HttpClient:
 
         Returns:
             HttpResult with response or err.
+
         """
         headers = kwargs.pop("headers", None) or {}
         headers["User-Agent"] = self.user_agent
@@ -331,7 +335,7 @@ class HttpClient:
                 retry_after = self._parse_retry_after(response)
                 if retry_after is not None:
                     time.sleep(min(retry_after, 300))
-                last_err = Exception(f"HTTP 429")
+                last_err = Exception("HTTP 429")
                 continue
 
             # 5xx retry

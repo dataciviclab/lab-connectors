@@ -5,9 +5,6 @@ requests.Session.get / requests.Session.head (SSL fallback).
 """
 from __future__ import annotations
 
-from typing import Any
-
-import pytest
 import requests
 
 from lab_connectors.http import HttpClient
