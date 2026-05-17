@@ -161,9 +161,6 @@ from lab_connectors.duckdb import safe_connect
 
 with safe_connect(":memory:") as con:
     result = con.execute("SELECT 1 AS x").fetchall()
-
-with safe_connect("data.duckdb", read_only=True) as con:
-    rows = con.execute("SELECT * FROM t").fetchall()
 ```
 
 #### Requisiti
