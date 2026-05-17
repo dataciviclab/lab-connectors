@@ -79,9 +79,11 @@ class HttpClient:
         self._session.close()
 
     def __enter__(self) -> HttpClient:
+        """Return self for use as a context manager."""
         return self
 
     def __exit__(self, *args: Any) -> None:
+        """Close the session when exiting the context manager."""
         self.close()
 
     # ------------------------------------------------------------------
