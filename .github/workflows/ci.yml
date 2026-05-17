@@ -19,7 +19,7 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -e ".[dev,mcp]"
+        run: pip install -e ".[dev,mcp,duckdb]"
 
       - name: Ruff
         run: ruff check .

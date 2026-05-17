@@ -48,6 +48,7 @@ ignore = ["D203", "D213"]
 "lab_connectors/duckdb/__init__.py" = ["D104"]
 "tests/**" = ["D"]
 "lab_connectors/http/types.py" = ["D105"]
+"lab_connectors/http/client.py" = ["D105"]
 
 [tool.mypy]
 python_version = "3.12"
