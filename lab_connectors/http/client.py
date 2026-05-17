@@ -74,6 +74,18 @@ class HttpClient:
         self._session = requests.Session()
         self._session.headers["User-Agent"] = self.user_agent
 
+    def close(self) -> None:
+        """Close the underlying session and release connection pool resources."""
+        self._session.close()
+
+    def __enter__(self) -> HttpClient:
+        """Return self for use as a context manager."""
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        """Close the session when exiting the context manager."""
+        self.close()
+
     # ------------------------------------------------------------------
     # Generic retry loop
     # ------------------------------------------------------------------

@@ -11,6 +11,7 @@ Le funzioni module-level usano un client singleton lazy.
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlencode
@@ -22,6 +23,7 @@ from urllib.request import Request, urlopen
 
 _GCS_CLIENT: Any | None = None  # storage.Client instance (lazy)
 _GCS_AUTH_MODE: str | None = None  # "sdk" | "http" | None
+_GCS_LOCK = threading.Lock()
 
 
 def _get_storage_client(project: str = "dataciviclab") -> Any | None:
@@ -30,24 +32,25 @@ def _get_storage_client(project: str = "dataciviclab") -> Any | None:
     Ritorna None se il pacchetto non è installato o le credenziali mancano.
     """
     global _GCS_CLIENT, _GCS_AUTH_MODE
-    if _GCS_AUTH_MODE == "http":
-        return None  # già fallito, non riprovare
-    if _GCS_CLIENT is not None:
-        return _GCS_CLIENT
+    with _GCS_LOCK:
+        if _GCS_AUTH_MODE == "http":
+            return None  # già fallito, non riprovare
+        if _GCS_CLIENT is not None:
+            return _GCS_CLIENT
 
-    try:
-        from google.cloud import storage  # type: ignore[import-not-found]
-    except ImportError:
-        _GCS_AUTH_MODE = "http"
-        return None
+        try:
+            from google.cloud import storage  # type: ignore[import-not-found]
+        except ImportError:
+            _GCS_AUTH_MODE = "http"
+            return None
 
-    try:
-        _GCS_CLIENT = storage.Client(project=project)
-        _GCS_AUTH_MODE = "sdk"
-        return _GCS_CLIENT
-    except Exception:
-        _GCS_AUTH_MODE = "http"
-        return None
+        try:
+            _GCS_CLIENT = storage.Client(project=project)
+            _GCS_AUTH_MODE = "sdk"
+            return _GCS_CLIENT
+        except Exception:
+            _GCS_AUTH_MODE = "http"
+            return None
 
 
 # ---------------------------------------------------------------------------

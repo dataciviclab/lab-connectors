@@ -300,3 +300,44 @@ def test_head_user_agent(monkeypatch) -> None:
     client.head("https://example.test/probe")
 
     assert calls[0]["headers"]["User-Agent"] == client.DEFAULT_USER_AGENT
+
+
+# ===========================================================================
+# close() and context manager
+# ===========================================================================
+
+
+def test_close_releases_session(monkeypatch) -> None:
+    """close() calls Session.close()."""
+    closed = []
+
+    class FakeSession:
+        headers: dict = {}
+
+        def close(self) -> None:
+            closed.append(True)
+
+    monkeypatch.setattr(requests, "Session", FakeSession)
+
+    client = HttpClient()
+    client.close()
+    assert closed == [True]
+
+
+def test_context_manager_calls_close(monkeypatch) -> None:
+    """Using HttpClient as context manager closes session on exit."""
+    closed = []
+
+    class FakeSession:
+        headers: dict = {}
+
+        def close(self) -> None:
+            closed.append(True)
+
+    monkeypatch.setattr(requests, "Session", FakeSession)
+    monkeypatch.setattr(requests, "get", lambda *a, **kw: _FakeResponse(200))
+
+    with HttpClient() as client:
+        client.get("https://example.test")
+
+    assert closed == [True]
