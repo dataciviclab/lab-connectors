@@ -25,6 +25,10 @@ class CacheStats:
     """Età della entry più vecchia (secondi)."""
     ttl_seconds: int
     """TTL configurato."""
+    hits: int
+    """Numero di hit dalla creazione o ultimo reset."""
+    misses: int
+    """Numero di miss dalla creazione o ultimo reset."""
 
 
 class TtlCache(Generic[K, V]):
@@ -46,17 +50,22 @@ class TtlCache(Generic[K, V]):
         self._ttl = ttl_seconds
         self._data: dict[K, tuple[float, V]] = {}
         self._lock = threading.Lock()
+        self._hits = 0
+        self._misses = 0
 
     def get(self, key: K) -> V | None:
         """Restituisce il valore se presente e non scaduto, altrimenti None."""
         with self._lock:
             entry = self._data.get(key)
             if entry is None:
+                self._misses += 1
                 return None
             ts, value = entry
             if time.monotonic() - ts > self._ttl:
                 del self._data[key]
+                self._misses += 1
                 return None
+            self._hits += 1
             return value
 
     def set(self, key: K, value: V) -> None:
@@ -85,4 +94,12 @@ class TtlCache(Generic[K, V]):
                 entries=len(self._data),
                 oldest_age_seconds=oldest,
                 ttl_seconds=self._ttl,
+                hits=self._hits,
+                misses=self._misses,
             )
+
+    def reset_stats(self) -> None:
+        """Azzera i contatori hit/miss senza svuotare la cache."""
+        with self._lock:
+            self._hits = 0
+            self._misses = 0
