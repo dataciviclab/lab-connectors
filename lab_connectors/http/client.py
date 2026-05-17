@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime
 import logging
 import time
+from collections.abc import Callable
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -74,6 +75,80 @@ class HttpClient:
         self._session.headers["User-Agent"] = self.user_agent
 
     # ------------------------------------------------------------------
+    # Generic retry loop
+    # ------------------------------------------------------------------
+
+    def _execute(
+        self,
+        method_name: str,
+        url: str,
+        request_fn: Callable[..., requests.Response],
+        ssl_fallback_fn: Callable[..., HttpResult],
+        effective_retries: int,
+        **kwargs: Any,
+    ) -> HttpResult:
+        """Execute an HTTP request with retry, backoff, and SSL fallback.
+
+        Args:
+            method_name: HTTP method name for logging (e.g. "HEAD", "GET").
+            url: The URL to request.
+            request_fn: Callable that performs the primary request.
+            ssl_fallback_fn: Callable that performs the SSL fallback request.
+            effective_retries: Number of total attempts (>= 1).
+            **kwargs: Passed to request_fn.
+
+        Returns:
+            HttpResult with response or err.
+
+        """
+        last_err: Exception | None = None
+        primary_exc: requests.exceptions.SSLError | None = None
+
+        for attempt in range(effective_retries):
+            if attempt > 0:
+                time.sleep(self.retry_backoff * (2 ** (attempt - 1)))
+
+            try:
+                response = request_fn(url, timeout=self.timeout, **kwargs)
+            except requests.exceptions.SSLError as exc:
+                primary_exc = exc
+                logger.warning(
+                    "SSL error on %s %s (attempt %d) — fallback",
+                    method_name, url, attempt + 1,
+                )
+                urllib3.disable_warnings(category=InsecureRequestWarning)
+                return ssl_fallback_fn(url, primary_exc, kwargs)
+
+            except requests.exceptions.RequestException as exc:
+                last_err = exc
+                if attempt < effective_retries - 1:
+                    continue
+                return HttpResult(response=None, err=exc, ssl_fallback_used=False)
+            except Exception as exc:
+                return HttpResult(response=None, err=exc, ssl_fallback_used=False)
+
+            # 429 Retry-After
+            if response.status_code == 429 and attempt < effective_retries - 1:
+                retry_after = self._parse_retry_after(response)
+                if retry_after is not None:
+                    time.sleep(min(retry_after, 300))
+                last_err = Exception("HTTP 429")
+                continue
+
+            # 5xx retry
+            if response.status_code >= 500 and attempt < effective_retries - 1:
+                last_err = Exception(f"HTTP {response.status_code}")
+                continue
+
+            return HttpResult(response=response, err=None, ssl_fallback_used=None)
+
+        return HttpResult(
+            response=None,
+            err=last_err or Exception("Max retries exhausted"),
+            ssl_fallback_used=False,
+        )
+
+    # ------------------------------------------------------------------
     # HEAD
     # ------------------------------------------------------------------
 
@@ -95,48 +170,13 @@ class HttpClient:
         kwargs["headers"] = headers
         kwargs.setdefault("allow_redirects", True)
 
-        last_err: Exception | None = None
-        primary_exc: requests.exceptions.SSLError | None = None
-
-        for attempt in range(max(1, self.max_retries)):
-            if attempt > 0:
-                time.sleep(self.retry_backoff * (2 ** (attempt - 1)))
-
-            try:
-                response = requests.head(url, timeout=self.timeout, **kwargs)
-            except requests.exceptions.SSLError as exc:
-                primary_exc = exc
-                logger.warning("SSL error on HEAD %s — fallback with verify=False", url)
-                urllib3.disable_warnings(category=InsecureRequestWarning)
-                return self._head_ssl_fallback(url, primary_exc, kwargs)
-
-            except requests.exceptions.RequestException as exc:
-                last_err = exc
-                if attempt < self.max_retries - 1:
-                    continue
-                return HttpResult(response=None, err=exc, ssl_fallback_used=False)
-            except Exception as exc:
-                return HttpResult(response=None, err=exc, ssl_fallback_used=False)
-
-            # 429 Retry-After
-            if response.status_code == 429 and attempt < self.max_retries - 1:
-                retry_after = self._parse_retry_after(response)
-                if retry_after is not None:
-                    time.sleep(min(retry_after, 300))
-                last_err = Exception("HTTP 429")
-                continue
-
-            # 5xx retry
-            if response.status_code >= 500 and attempt < self.max_retries - 1:
-                last_err = Exception(f"HTTP {response.status_code}")
-                continue
-
-            return HttpResult(response=response, err=None, ssl_fallback_used=None)
-
-        return HttpResult(
-            response=None,
-            err=last_err or Exception("Max retries exhausted"),
-            ssl_fallback_used=False,
+        return self._execute(
+            "HEAD",
+            url,
+            lambda u, **kw: requests.head(u, **kw),
+            lambda u, exc, kw: self._head_ssl_fallback(u, exc, kw),
+            max(1, self.max_retries),
+            **kwargs,
         )
 
     def _head_ssl_fallback(
@@ -146,8 +186,6 @@ class HttpClient:
         kwargs: dict[str, Any],
     ) -> HttpResult:
         """SSL fallback for HEAD — strips allow_redirects to avoid collision."""
-        # Build fallback kwargs: exclude 'headers' (handled by session) and
-        # 'allow_redirects' (passed explicitly below to avoid duplicate kwarg)
         fallback_kwargs = {
             k: v for k, v in kwargs.items()
             if k not in ("headers", "allow_redirects")
@@ -192,51 +230,13 @@ class HttpClient:
         headers["User-Agent"] = self.user_agent
         kwargs["headers"] = headers
 
-        last_err: Exception | None = None
-        primary_exc: requests.exceptions.SSLError | None = None
-
-        for attempt in range(max(1, self.max_retries)):
-            if attempt > 0:
-                time.sleep(self.retry_backoff * (2 ** (attempt - 1)))
-
-            try:
-                response = requests.get(url, timeout=self.timeout, **kwargs)
-            except requests.exceptions.SSLError as exc:
-                primary_exc = exc
-                logger.warning(
-                    "SSL error on GET %s (attempt %d) — fallback",
-                    url, attempt + 1,
-                )
-                urllib3.disable_warnings(category=InsecureRequestWarning)
-                return self._get_ssl_fallback(url, primary_exc, kwargs)
-
-            except requests.exceptions.RequestException as exc:
-                last_err = exc
-                if attempt < self.max_retries - 1:
-                    continue
-                return HttpResult(response=None, err=exc, ssl_fallback_used=False)
-            except Exception as exc:
-                return HttpResult(response=None, err=exc, ssl_fallback_used=False)
-
-            # 429 Retry-After
-            if response.status_code == 429 and attempt < self.max_retries - 1:
-                retry_after = self._parse_retry_after(response)
-                if retry_after is not None:
-                    time.sleep(min(retry_after, 300))
-                last_err = Exception("HTTP 429")
-                continue
-
-            # 5xx retry
-            if response.status_code >= 500 and attempt < self.max_retries - 1:
-                last_err = Exception(f"HTTP {response.status_code}")
-                continue
-
-            return HttpResult(response=response, err=None, ssl_fallback_used=None)
-
-        return HttpResult(
-            response=None,
-            err=last_err or Exception("Max retries exhausted"),
-            ssl_fallback_used=False,
+        return self._execute(
+            "GET",
+            url,
+            lambda u, **kw: requests.get(u, **kw),
+            lambda u, exc, kw: self._get_ssl_fallback(u, exc, kw),
+            max(1, self.max_retries),
+            **kwargs,
         )
 
     def _get_ssl_fallback(
@@ -301,54 +301,13 @@ class HttpClient:
         headers["User-Agent"] = self.user_agent
         kwargs["headers"] = headers
 
-        effective_retries = max(1, retries)
-        last_err: Exception | None = None
-        primary_exc: requests.exceptions.SSLError | None = None
-
-        for attempt in range(effective_retries):
-            if attempt > 0:
-                time.sleep(self.retry_backoff * (2 ** (attempt - 1)))
-
-            try:
-                response = requests.post(
-                    url, data=data, json=json, timeout=self.timeout, **kwargs
-                )
-            except requests.exceptions.SSLError as exc:
-                primary_exc = exc
-                logger.warning(
-                    "SSL error on POST %s (attempt %d) — fallback",
-                    url, attempt + 1,
-                )
-                urllib3.disable_warnings(category=InsecureRequestWarning)
-                return self._post_ssl_fallback(url, data, json, primary_exc, kwargs)
-
-            except requests.exceptions.RequestException as exc:
-                last_err = exc
-                if attempt < effective_retries - 1:
-                    continue
-                return HttpResult(response=None, err=exc, ssl_fallback_used=False)
-            except Exception as exc:
-                return HttpResult(response=None, err=exc, ssl_fallback_used=False)
-
-            # 429 Retry-After
-            if response.status_code == 429 and attempt < effective_retries - 1:
-                retry_after = self._parse_retry_after(response)
-                if retry_after is not None:
-                    time.sleep(min(retry_after, 300))
-                last_err = Exception("HTTP 429")
-                continue
-
-            # 5xx retry
-            if response.status_code >= 500 and attempt < effective_retries - 1:
-                last_err = Exception(f"HTTP {response.status_code}")
-                continue
-
-            return HttpResult(response=response, err=None, ssl_fallback_used=None)
-
-        return HttpResult(
-            response=None,
-            err=last_err or Exception("Max retries exhausted"),
-            ssl_fallback_used=False,
+        return self._execute(
+            "POST",
+            url,
+            lambda u, **kw: requests.post(u, data=data, json=json, **kw),
+            lambda u, exc, kw: self._post_ssl_fallback(u, data, json, exc, kw),
+            max(1, retries),
+            **kwargs,
         )
 
     def _post_ssl_fallback(
