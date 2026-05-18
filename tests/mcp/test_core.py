@@ -1,7 +1,9 @@
 """Tests per lab_connectors.mcp.core."""
 from __future__ import annotations
 
-from lab_connectors.mcp.core import create_mcp_server, guard, guard_timed
+import time
+
+from lab_connectors.mcp.core import DEFAULT_SLOW_MS, create_mcp_server, guard, guard_timed
 from lab_connectors.mcp.errors import ErrorCode, McpError
 
 
@@ -81,3 +83,31 @@ class TestGuardTimed:
 
         result = guard_timed(_fail, "test_tool_unexpected", logger_name="test-guard-timed")
         assert result["error"] == "unexpected_error"
+
+    def test_default_logger_name(self) -> None:
+        """Deve funzionare anche senza logger_name (default = tool_name)."""
+        result = guard_timed(lambda: {"ok": True}, "test_tool_default")
+        assert result == {"ok": True}
+
+    def test_slow_ms_default(self) -> None:
+        """slow_ms di default (5000) non altera il risultato."""
+        result = guard_timed(lambda: {"ok": True}, "test_tool", logger_name="test")
+        assert result == {"ok": True}
+
+    def test_slow_ms_zero(self) -> None:
+        """slow_ms=0 funziona (tutte le chiamate oltre soglia)."""
+        result = guard_timed(lambda: {"ok": True}, "test_tool", slow_ms=0, logger_name="test")
+        assert result == {"ok": True}
+
+    def test_slow_does_not_block_result(self) -> None:
+        """Anche se la chiamata supera slow_ms, il risultato torna corretto."""
+        def _slow() -> dict:
+            time.sleep(0.015)  # 15ms
+            return {"ok": "slow_but_ok"}
+
+        result = guard_timed(_slow, "slow_tool", slow_ms=1, logger_name="test")
+        assert result == {"ok": "slow_but_ok"}
+
+    def test_slow_ms_constant_exists(self) -> None:
+        """DEFAULT_SLOW_MS deve essere 5000."""
+        assert DEFAULT_SLOW_MS == 5000
