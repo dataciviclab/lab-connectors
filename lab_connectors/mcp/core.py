@@ -12,7 +12,7 @@ Uso tipico in un server MCP::
 
     @mcp.tool(description="...", structured_output=True)
     def toolkit_inspect_paths(config_path: str) -> dict:
-        return guard(_impl, config_path)
+        return guard_timed(_impl, "toolkit_inspect_paths", config_path)
 
     def _impl(config_path: str) -> dict:
         # ...
@@ -100,19 +100,47 @@ def guard(fn: Fn, *args: Any, **kwargs: Any) -> dict[str, Any]:
         return McpError.from_exception(exc).to_dict()
 
 
+DEFAULT_SLOW_MS = 5000
+
+
+def _log_ok(
+    logger: Any, tool_name: str, elapsed: int, slow_ms: int
+) -> None:
+    """Logga esito OK, WARNING se oltre soglia."""
+    if elapsed > slow_ms:
+        logger.warning(
+            tool_name,
+            f"OK ({elapsed}ms)",
+            duration_ms=elapsed,
+            slow=True,
+            threshold_ms=slow_ms,
+        )
+    else:
+        logger.info(tool_name, f"OK ({elapsed}ms)", duration_ms=elapsed)
+
+
 def guard_timed(
     fn: Fn,
     tool_name: str,
     *args: Any,
     logger_name: str | None = None,
+    slow_ms: int = DEFAULT_SLOW_MS,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Come ``guard()`` ma con logging strutturato della durata.
 
+    Logger e metriche di performance per ogni tool MCP.
+    Il nome del logger si ricava automaticamente da *tool_name* se
+    ``logger_name`` non è passato (tipicamente il nome del server).
+
+    Se la chiamata supera *slow_ms* millisecondi, il log è WARNING
+    invece di INFO con flag ``slow=True``.
+
     Args:
         fn: Funzione da eseguire.
-        tool_name: Nome del tool MCP (per logging).
-        logger_name: Nome del server MCP (per logging). Default: same as tool_name.
+        tool_name: Nome del tool MCP (usato come label nei log).
+        logger_name: Nome del logger strutturato. Default: *tool_name*.
+        slow_ms: Soglia lentezza in ms. Oltre, log WARNING. Default 5000.
         *args: Args posizionali passati a fn.
         **kwargs: Args keyword passati a fn.
 
@@ -120,8 +148,6 @@ def guard_timed(
         Dict con risultato o errore.
 
     """
-    # logger_name dovrebbe essere il nome del server, non del tool.
-    # Se non passato, usa il tool_name come fallback ma avvisa via log.
     _log_name = logger_name or tool_name
     logger = get_mcp_logger(_log_name)
     start = time.monotonic()
@@ -129,7 +155,7 @@ def guard_timed(
     try:
         result = fn(*args, **kwargs)
         elapsed = round((time.monotonic() - start) * 1000)
-        logger.info(tool_name, f"OK ({elapsed}ms)", duration_ms=elapsed)
+        _log_ok(logger, tool_name, elapsed, slow_ms)
         return result if isinstance(result, dict) else {"result": result}
     except McpError as exc:
         elapsed = round((time.monotonic() - start) * 1000)
