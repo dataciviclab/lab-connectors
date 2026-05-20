@@ -94,8 +94,8 @@ def https_url(bucket_key: str, pattern_key: str, **kwargs: Any) -> str:
 # Bucket names (costanti — corrispondono a paths.json)
 # ---------------------------------------------------------------------------
 
-CLEAN_BUCKET: str = "dataciviclab-clean"
-MART_BUCKET: str = "dataciviclab-mart"
+CLEAN_BUCKET: str = get_bucket("clean")
+MART_BUCKET: str = get_bucket("mart")
 
 # ---------------------------------------------------------------------------
 # Convenience functions usate dai consumer
