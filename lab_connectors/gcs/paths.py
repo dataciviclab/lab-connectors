@@ -1,27 +1,17 @@
-"""Path contract GCS — source of truth per i path degli artifact su GCS.
+"""Path contract GCS per DataCivicLab.
 
-Questo modulo carica ``paths.json`` (nella stessa directory) e fornisce:
+Carica ``paths.json`` e fornisce risoluzione pattern e composizione URL.
+Pattern e bucket names sono nel JSON; questo modulo è solo un wrapper tipato.
 
-- ``resolve(pattern_key, **kwargs)`` → path relativo al bucket root
-- ``gs_url(bucket_key, pattern_key, **kwargs)`` → URL ``gs://bucket/path``
-- ``https_url(bucket_key, pattern_key, **kwargs)`` → URL pubblico GCS
-- ``get_bucket(bucket_key)`` → nome bucket per chiave
-- Costanti ``CLEAN_BUCKET``, ``MART_BUCKET``
+Usage::
 
-Esempio::
+    from lab_connectors.gcs.paths import gs_url, resolve
 
-    from lab_connectors.gcs.paths import resolve, gs_url
+    resolve("clean_parquet", slug="demo", year=2024)
+    # → "demo/2024/demo_2024_clean.parquet"
 
-    # Path relativo
-    resolve("clean_parquet", slug="ispra_ru_base", year=2024)
-    # → "ispra_ru_base/2024/ispra_ru_base_2024_clean.parquet"
-
-    # URL completo gs://
-    gs_url("clean", "clean_parquet", slug="ispra_ru_base", year=2024)
-    # → "gs://dataciviclab-clean/ispra_ru_base/2024/ispra_ru_base_2024_clean.parquet"
-
-I pattern canonici sono definiti in ``paths.json`` e coprono tutti gli artifact
-prodotti dalla pipeline. Se aggiungi un nuovo pattern, aggiorna entrambi i file.
+    gs_url("clean", "clean_parquet", slug="demo", year=2024)
+    # → "gs://dataciviclab-clean/demo/2024/demo_2024_clean.parquet"
 """
 
 from __future__ import annotations
@@ -41,7 +31,7 @@ _CONTRACT_LOCK = threading.Lock()
 
 
 def load_contract() -> dict[str, Any]:
-    """Carica il contratto paths.json (lazy, thread-safe)."""
+    """Carica paths.json. Lazy, thread-safe. Fallisce forte se manca."""
     global _CONTRACT
     if _CONTRACT is not None:
         return _CONTRACT
@@ -53,8 +43,7 @@ def load_contract() -> dict[str, Any]:
         except FileNotFoundError:
             raise RuntimeError(
                 f"paths.json non trovato in {_CONTRACT_PATH}. "
-                "Verifica che lab-connectors sia installato con i data file "
-                "(controlla MANIFEST.in o pyproject.toml include)."
+                "Include il file in pyproject.toml [tool.setuptools.package-data]."
             ) from None
         return _CONTRACT
 
@@ -63,165 +52,74 @@ def load_contract() -> dict[str, Any]:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def get_bucket(bucket_key: str) -> str:
-    """Restituisce il nome bucket per una chiave (es. ``clean``, ``mart``).
-
-    Raises:
-        KeyError: se la chiave non esiste nel contratto.
-
-    """
+    """Nome bucket per chiave (``clean``, ``mart``)."""
     buckets = load_contract()["buckets"]
     if bucket_key not in buckets:
-        raise KeyError(
-            f"Bucket key sconosciuta: {bucket_key!r}. "
-            f"Disponibili: {list(buckets)}"
-        )
+        raise KeyError(f"Bucket sconosciuto: {bucket_key!r}. Options: {list(buckets)}")
     return buckets[bucket_key]
 
 
-def get_pattern(pattern_key: str) -> str:
-    """Restituisce il template string di un pattern.
+def resolve(pattern_key: str, **kwargs: Any) -> str:
+    """Risolve un pattern in path relativo al bucket root.
 
-    Raises:
-        KeyError: se il pattern non esiste nel contratto.
-
+    I pattern senza placeholder (es. ``catalog_manifest``) non richiedono kwargs.
+    Quelli con placeholder (es. ``clean_parquet``) richiedono ``slug``, ``year`` ecc.
     """
     patterns = load_contract()["patterns"]
     if pattern_key not in patterns:
-        raise KeyError(
-            f"Pattern sconosciuto: {pattern_key!r}. "
-            f"Disponibili: {list(patterns)}"
-        )
-    return patterns[pattern_key]
-
-
-def resolve(pattern_key: str, **kwargs: Any) -> str:
-    """Risolve un pattern con i parametri forniti.
-
-    Ritorna il path **relativo al bucket root** (senza protocollo ne bucket).
-
-    Esempi::
-
-        resolve("clean_parquet", slug="ispra_ru_base", year=2024)
-        # → "ispra_ru_base/2024/ispra_ru_base_2024_clean.parquet"
-
-        resolve("catalog_manifest")
-        # → "catalog/manifest.json"
-
-    Raises:
-        KeyError: se il pattern non esiste.
-        KeyError: se manca un parametro obbligatorio del template.
-
-    """
-    template = get_pattern(pattern_key)
+        raise KeyError(f"Pattern sconosciuto: {pattern_key!r}. Options: {list(patterns)}")
     try:
-        return template.format(**kwargs)
+        return patterns[pattern_key].format(**kwargs)
     except KeyError as e:
         raise KeyError(
-            f"Parametro mancante per il pattern {pattern_key!r}: {e}. "
-            f"Il template è: {template!r}"
+            f"Parametro mancante per {pattern_key!r}: {e}. "
+            f"Template: {patterns[pattern_key]!r}"
         ) from None
 
 
 def gs_url(bucket_key: str, pattern_key: str, **kwargs: Any) -> str:
-    """Compone un URL ``gs://<bucket>/<path>``.
-
-    Args:
-        bucket_key: chiave bucket (es. ``clean``, ``mart``).
-        pattern_key: chiave pattern (es. ``clean_parquet``).
-        **kwargs: parametri per il pattern.
-
-    Esempio::
-
-        gs_url("clean", "clean_parquet", slug="ispra_ru_base", year=2024)
-        # → "gs://dataciviclab-clean/ispra_ru_base/2024/ispra_ru_base_2024_clean.parquet"
-
-    """
-    bucket = get_bucket(bucket_key)
-    path = resolve(pattern_key, **kwargs)
-    return f"gs://{bucket}/{path}"
+    """URL ``gs://<bucket>/<path>``."""
+    return f"gs://{get_bucket(bucket_key)}/{resolve(pattern_key, **kwargs)}"
 
 
 def https_url(bucket_key: str, pattern_key: str, **kwargs: Any) -> str:
-    """Compone un URL HTTPS pubblico GCS.
-
-    Args:
-        bucket_key: chiave bucket (es. ``clean``, ``mart``).
-        pattern_key: chiave pattern (es. ``clean_parquet``).
-        **kwargs: parametri per il pattern.
-
-    Esempio::
-
-        https_url("clean", "clean_parquet", slug="ispra_ru_base", year=2024)
-        # → "https://storage.googleapis.com/dataciviclab-clean/ispra_ru_base/2024/...parquet"
-
-    """
+    """URL pubblico ``https://storage.googleapis.com/<bucket>/<path>``."""
     bucket = get_bucket(bucket_key)
-    path = resolve(pattern_key, **kwargs)
-    return f"https://storage.googleapis.com/{bucket}/{path}"
+    return f"https://storage.googleapis.com/{bucket}/{resolve(pattern_key, **kwargs)}"
 
 
 # ---------------------------------------------------------------------------
-# Costanti di comodo (bucket names)
+# Bucket names (costanti — corrispondono a paths.json)
 # ---------------------------------------------------------------------------
 
 CLEAN_BUCKET: str = "dataciviclab-clean"
 MART_BUCKET: str = "dataciviclab-mart"
 
-
-def _init_bucket_constants() -> None:
-    """Aggiorna le costanti dai valori reali del contratto."""
-    global CLEAN_BUCKET, MART_BUCKET
-    try:
-        contract = load_contract()
-        CLEAN_BUCKET = contract["buckets"]["clean"]
-        MART_BUCKET = contract["buckets"]["mart"]
-    except (RuntimeError, KeyError):
-        pass  # mantieni i default hardcoded
-
-
-_init_bucket_constants()
-
-
 # ---------------------------------------------------------------------------
-# Convenience functions per i pattern più comuni
+# Convenience functions usate dai consumer
 # ---------------------------------------------------------------------------
-
-def clean_parquet(slug: str, year: int | str) -> str:
-    """Path relativo per un clean parquet: ``{slug}/{year}/{slug}_{year}_clean.parquet``.
-
-    Returns:
-        Path relativo al bucket root.
-
-    Esempio::
-
-        clean_parquet("ispra_ru_base", 2024)
-        # → "ispra_ru_base/2024/ispra_ru_base_2024_clean.parquet"
-
-    """
-    return resolve("clean_parquet", slug=slug, year=str(year))
 
 
 def pipeline_run(slug: str, year: int | str) -> str:
-    """Path relativo per pipeline_run.json."""
+    """Path ``{slug}/{year}/pipeline_run.json``."""
     return resolve("pipeline_run", slug=slug, year=str(year))
 
 
 def catalog_manifest() -> str:
-    """Path relativo per catalog/manifest.json."""
+    """Path ``catalog/manifest.json``."""
     return resolve("catalog_manifest")
 
 
 __all__ = [
     "load_contract",
     "get_bucket",
-    "get_pattern",
     "resolve",
     "gs_url",
     "https_url",
     "CLEAN_BUCKET",
     "MART_BUCKET",
-    "clean_parquet",
     "pipeline_run",
     "catalog_manifest",
 ]
