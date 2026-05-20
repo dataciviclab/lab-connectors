@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "updated_at": "2026-05-20",
+  "description": "Path contract canonici GCS per DataCivicLab. I pattern sono relativi al bucket root.",
+  "docs_url": "https://github.com/dataciviclab/lab-connectors/tree/main/lab_connectors/gcs/paths.py",
+  "buckets": {
+    "clean": "dataciviclab-clean",
+    "mart": "dataciviclab-mart"
+  },
+  "patterns": {
+    "clean_parquet": "{slug}/{year}/{slug}_{year}_clean.parquet",
+    "pipeline_run": "{slug}/{year}/pipeline_run.json",
+    "catalog_manifest": "catalog/manifest.json",
+    "catalog_signals": "catalog/catalog_signals.json",
+    "catalog_inventory_latest": "catalog_inventory/catalog_inventory_latest.parquet",
+    "catalog_inventory_report": "catalog_inventory/catalog_inventory_report.json",
+    "catalog_inventory_source_check": "catalog_inventory/source-check/source_check_results.parquet"
+  }
+}

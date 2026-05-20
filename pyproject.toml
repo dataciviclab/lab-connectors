@@ -4,12 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lab-connectors"
-version = "0.8.0"
-description = "Shared HTTP client and adapters for DataCivicLab"
+version = "0.9.0"
+description = "Shared HTTP client, GCS path contract, and adapters for DataCivicLab"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [{name = "DataCivicLab"}]
+
+[tool.setuptools.package-data]
+"lab_connectors.gcs" = ["paths.json"]
 
 dependencies = [
     "requests>=2.31.0",
