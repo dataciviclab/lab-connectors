@@ -1,0 +1,125 @@
+"""Path contract GCS per DataCivicLab.
+
+Carica ``paths.json`` e fornisce risoluzione pattern e composizione URL.
+Pattern e bucket names sono nel JSON; questo modulo è solo un wrapper tipato.
+
+Usage::
+
+    from lab_connectors.gcs.paths import gs_url, resolve
+
+    resolve("clean_parquet", slug="demo", year=2024)
+    # → "demo/2024/demo_2024_clean.parquet"
+
+    gs_url("clean", "clean_parquet", slug="demo", year=2024)
+    # → "gs://dataciviclab-clean/demo/2024/demo_2024_clean.parquet"
+"""
+
+from __future__ import annotations
+
+import json
+import threading
+from pathlib import Path
+from typing import Any
+
+# ---------------------------------------------------------------------------
+# Caricamento contratto (lazy, thread-safe)
+# ---------------------------------------------------------------------------
+
+_CONTRACT_PATH = Path(__file__).resolve().parent / "paths.json"
+_CONTRACT: dict[str, Any] | None = None
+_CONTRACT_LOCK = threading.Lock()
+
+
+def load_contract() -> dict[str, Any]:
+    """Carica paths.json. Lazy, thread-safe. Fallisce forte se manca."""
+    global _CONTRACT
+    if _CONTRACT is not None:
+        return _CONTRACT
+    with _CONTRACT_LOCK:
+        if _CONTRACT is not None:
+            return _CONTRACT
+        try:
+            _CONTRACT = json.loads(_CONTRACT_PATH.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            raise RuntimeError(
+                f"paths.json non trovato in {_CONTRACT_PATH}. "
+                "Include il file in pyproject.toml [tool.setuptools.package-data]."
+            ) from None
+        return _CONTRACT
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def get_bucket(bucket_key: str) -> str:
+    """Nome bucket per chiave (``clean``, ``mart``)."""
+    buckets = load_contract()["buckets"]
+    if bucket_key not in buckets:
+        raise KeyError(f"Bucket sconosciuto: {bucket_key!r}. Options: {list(buckets)}")
+    return buckets[bucket_key]
+
+
+def resolve(pattern_key: str, **kwargs: Any) -> str:
+    """Risolve un pattern in path relativo al bucket root.
+
+    I pattern senza placeholder (es. ``catalog_manifest``) non richiedono kwargs.
+    Quelli con placeholder (es. ``clean_parquet``) richiedono ``slug``, ``year`` ecc.
+    """
+    patterns = load_contract()["patterns"]
+    if pattern_key not in patterns:
+        raise KeyError(f"Pattern sconosciuto: {pattern_key!r}. Options: {list(patterns)}")
+    try:
+        return patterns[pattern_key].format(**kwargs)
+    except KeyError as e:
+        raise KeyError(
+            f"Parametro mancante per {pattern_key!r}: {e}. "
+            f"Template: {patterns[pattern_key]!r}"
+        ) from None
+
+
+def gs_url(bucket_key: str, pattern_key: str, **kwargs: Any) -> str:
+    """URL ``gs://<bucket>/<path>``."""
+    return f"gs://{get_bucket(bucket_key)}/{resolve(pattern_key, **kwargs)}"
+
+
+def https_url(bucket_key: str, pattern_key: str, **kwargs: Any) -> str:
+    """URL pubblico ``https://storage.googleapis.com/<bucket>/<path>``."""
+    bucket = get_bucket(bucket_key)
+    return f"https://storage.googleapis.com/{bucket}/{resolve(pattern_key, **kwargs)}"
+
+
+# ---------------------------------------------------------------------------
+# Bucket names (costanti — corrispondono a paths.json)
+# ---------------------------------------------------------------------------
+
+CLEAN_BUCKET: str = get_bucket("clean")
+MART_BUCKET: str = get_bucket("mart")
+
+# ---------------------------------------------------------------------------
+# Convenience functions usate dai consumer
+# ---------------------------------------------------------------------------
+
+
+def pipeline_run(slug: str, year: int | str) -> str:
+    """Path ``{slug}/{year}/pipeline_run.json``."""
+    return resolve("pipeline_run", slug=slug, year=str(year))
+
+
+def catalog_manifest() -> str:
+    """Path ``catalog/manifest.json``."""
+    return resolve("catalog_manifest")
+
+
+__all__ = [
+    "load_contract",
+    "get_bucket",
+    "resolve",
+    "gs_url",
+    "https_url",
+    "CLEAN_BUCKET",
+    "MART_BUCKET",
+    "pipeline_run",
+    "catalog_manifest",
+]
