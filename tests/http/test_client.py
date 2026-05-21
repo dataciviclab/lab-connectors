@@ -29,6 +29,7 @@ class _FakeResponse:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.contract
 @pytest.mark.parametrize(
     ("body_kwargs", "expect_key", "expect_val"),
     [
@@ -73,6 +74,7 @@ HTTP_ERROR_SCENARIOS: list[tuple[str, str, type, str]] = [
 ]
 
 
+@pytest.mark.contract
 @pytest.mark.parametrize(
     ("error_label", "response_content", "desc", "match"),
     HTTP_ERROR_SCENARIOS,
@@ -111,6 +113,7 @@ def test_post_errors(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.adapter
 def test_post_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     """Retry opt-in: 5xx triggers retry only when retries>0."""
     monkeypatch.setattr(time, "sleep", lambda secs: None)
@@ -203,6 +206,7 @@ def _patch_session_post(monkeypatch: pytest.MonkeyPatch, fake_post) -> None:
     )
 
 
+@pytest.mark.adapter
 def test_post_ssl_fallback_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """SSLError triggers SSL fallback; fallback succeeds."""
     attempts: list[dict[str, Any]] = []
@@ -225,6 +229,7 @@ def test_post_ssl_fallback_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len([a for a in attempts if a.get("verify") is False]) == 1
 
 
+@pytest.mark.adapter
 def test_post_ssl_fallback_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """SSL fallback also fails → HttpResult with HttpFallbackError."""
 

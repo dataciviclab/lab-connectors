@@ -7,10 +7,13 @@ from __future__ import annotations
 
 import time
 
+import pytest
 import requests
 
 from lab_connectors.http import HttpClient
 from lab_connectors.http.types import HttpFallbackError
+
+pytestmark = pytest.mark.adapter
 
 # ---------------------------------------------------------------------------
 # Helpers
