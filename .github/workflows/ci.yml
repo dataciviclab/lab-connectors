@@ -19,7 +19,7 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -e ".[dev,mcp,duckdb]"
+        run: pip install -e ".[dev,mcp,duckdb]" pytest-cov
 
       - name: Ruff
         run: ruff check .
@@ -28,4 +28,4 @@ jobs:
         run: mypy lab_connectors/
 
       - name: Pytest
-        run: pytest tests/ -q -m "not smoke"
+        run: pytest tests/ -q -m "not smoke" --cov=lab_connectors --cov-report=term --cov-fail-under=80

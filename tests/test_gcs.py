@@ -114,6 +114,15 @@ class GcsUploadTest(unittest.TestCase):
             upload_file("/tmp/test.parquet", "bucket", "path/test.parquet")
 
     @patch("lab_connectors.gcs.client._get_storage_client")
+    def test_upload_string_no_sdk_raises(self, mock_get_client) -> None:
+        """upload_string senza SDK → RuntimeError."""
+        mock_get_client.return_value = None
+        from lab_connectors.gcs import upload_string
+
+        with self.assertRaises(RuntimeError):
+            upload_string("content", "bucket", "path/test.txt")
+
+    @patch("lab_connectors.gcs.client._get_storage_client")
     def test_list_auth_true_no_sdk_raises(self, mock_get_client) -> None:
         """auth=True senza SDK deve fallire, non degradare a HTTP."""
         mock_get_client.return_value = None
@@ -121,6 +130,65 @@ class GcsUploadTest(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             list_objects("test-bucket", auth=True)
+
+
+class GcsHttpPaginationTest(unittest.TestCase):
+    """Test per la paginazione HTTP fallback (auth=None senza SDK)."""
+
+    @patch("lab_connectors.gcs.client._get_storage_client")
+    @patch("lab_connectors.gcs.client.urlopen")
+    def test_auth_none_fallback_no_pagination(self, mock_urlopen, mock_get_client):
+        """auth=None senza SDK → fallback HTTP, pagina singola."""
+        import json
+        from io import BytesIO
+
+        mock_get_client.return_value = None
+
+        def fake_open(url, **kw):
+            data = {"items": [
+                {"name": "a.parquet", "size": "100", "updated": "2026-01-01T00:00:00Z"}
+            ]}
+            result = BytesIO(json.dumps(data).encode())
+            result.status = 200
+            return result
+
+        mock_urlopen.side_effect = fake_open
+
+        results = list_objects("test-bucket", prefix="", auth=None)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "a.parquet")
+        self.assertEqual(results[0]["size"], 100)
+
+    @patch("lab_connectors.gcs.client._get_storage_client")
+    @patch("lab_connectors.gcs.client.urlopen")
+    def test_auth_none_fallback_with_pagination(self, mock_urlopen, mock_get_client):
+        """auth=None senza SDK → paginazione HTTP, 2 pagine."""
+        import json
+        from io import BytesIO
+
+        mock_get_client.return_value = None
+
+        page = 0
+        def fake_open(url, **kw):
+            nonlocal page
+            page += 1
+            items = [{"name": f"p1_{i}.parquet", "size": "10",
+                       "updated": "2026-01-01T00:00:00Z"} for i in range(3)]
+            if page == 1:
+                data = {"items": items, "nextPageToken": "token-p2"}
+            else:
+                data = {"items": [{"name": "p2_0.parquet", "size": "10",
+                                    "updated": "2026-01-01T00:00:00Z"}]}
+            result = BytesIO(json.dumps(data).encode())
+            result.status = 200
+            return result
+
+        mock_urlopen.side_effect = fake_open
+
+        results = list_objects("test-bucket", prefix="", auth=None)
+        self.assertEqual(len(results), 4)
+        self.assertIn("p1_0.parquet", [r["name"] for r in results])
+        self.assertIn("p2_0.parquet", [r["name"] for r in results])
 
 
 if __name__ == "__main__":
