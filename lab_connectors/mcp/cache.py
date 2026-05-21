@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 K = TypeVar("K")
 V = TypeVar("V")
@@ -27,7 +27,7 @@ class CacheStats:
     """TTL configurato."""
 
 
-class TtlCache(Generic[K, V]):
+class TtlCache[K, V]:
     """Cache generica thread-safe con expiration basata su TTL.
 
     Tipi::
