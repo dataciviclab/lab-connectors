@@ -6,10 +6,10 @@ I codici sono categorizzati per dominio: artifact, config, gcs, query, cache, ge
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     """Codici errore tassonomici per MCP.
 
     Pattern: `<dominio>_<problema>` in snake_case.
