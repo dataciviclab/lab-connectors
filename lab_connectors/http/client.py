@@ -378,7 +378,7 @@ class HttpClient:
         # Try HTTP-date format
         try:
             parsed = parsedate_to_datetime(retry_after)
-            now = datetime.datetime.now(datetime.timezone.utc)
+            now = datetime.datetime.now(datetime.UTC)
             delta = (parsed - now).total_seconds()
             return max(0.0, delta)
         except Exception:
