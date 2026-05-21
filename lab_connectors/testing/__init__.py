@@ -248,7 +248,7 @@ class _FakeHTTPError(requests.HTTPError):
     """
 
     def __init__(self, status_code: int, text: str = "",
-                 response: object = None):
+                 response: Any = None):
         """Initialize the HTTP error.
 
         Args:
