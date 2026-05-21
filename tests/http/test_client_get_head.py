@@ -5,10 +5,15 @@ requests.Session.get / requests.Session.head (SSL fallback).
 """
 from __future__ import annotations
 
+import time
+
+import pytest
 import requests
 
 from lab_connectors.http import HttpClient
 from lab_connectors.http.types import HttpFallbackError
+
+pytestmark = pytest.mark.adapter
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -60,6 +65,7 @@ def test_get_success(monkeypatch) -> None:
 
 
 def test_get_5xx_then_success(monkeypatch) -> None:
+    monkeypatch.setattr(time, "sleep", lambda secs: None)
     attempts = []
 
     def fake(url, **kw):
@@ -78,6 +84,7 @@ def test_get_5xx_then_success(monkeypatch) -> None:
 
 
 def test_get_5xx_exhaustion_returns_last_response(monkeypatch) -> None:
+    monkeypatch.setattr(time, "sleep", lambda secs: None)
     attempts = []
 
     def fake(url, **kw):
@@ -111,12 +118,14 @@ def test_get_no_retry_on_4xx(monkeypatch) -> None:
 
 
 def test_get_connection_error_retry(monkeypatch) -> None:
+    """Connection error triggers retry with backoff."""
+    monkeypatch.setattr(time, "sleep", lambda secs: None)
     attempts = []
 
     def fake(url, **kw):
         attempts.append(len(attempts))
         if len(attempts) < 2:
-            raise requests.exceptions.ConnectionError("refused")
+            raise requests.ConnectionError("refused")
         return _FakeResponse(200, b"ok")
 
     monkeypatch.setattr(requests, "get", fake)
@@ -129,11 +138,12 @@ def test_get_connection_error_retry(monkeypatch) -> None:
 
 
 def test_get_connection_error_exhaustion(monkeypatch) -> None:
+    monkeypatch.setattr(time, "sleep", lambda secs: None)
     attempts = []
 
     def fake(url, **kw):
         attempts.append(len(attempts))
-        raise requests.exceptions.ConnectionError("down")
+        raise requests.ConnectionError("dead")
 
     monkeypatch.setattr(requests, "get", fake)
 
@@ -270,12 +280,13 @@ def test_head_ssl_fallback_failure(monkeypatch) -> None:
 
 def test_head_connection_error_retry(monkeypatch) -> None:
     """Head now retries on connection errors (like GET)."""
+    monkeypatch.setattr(time, "sleep", lambda secs: None)
     attempts = []
 
     def fake(url, **kw):
         attempts.append(len(attempts))
         if len(attempts) < 2:
-            raise requests.exceptions.ConnectionError("refused")
+            raise requests.ConnectionError("refused")
         return _FakeResponse(200, b"")
 
     monkeypatch.setattr(requests, "head", fake)
