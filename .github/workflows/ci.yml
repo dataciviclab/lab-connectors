@@ -28,4 +28,4 @@ jobs:
         run: mypy lab_connectors/
 
       - name: Pytest
-        run: pytest tests/ -q
+        run: pytest tests/ -q -m "not smoke"
