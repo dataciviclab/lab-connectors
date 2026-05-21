@@ -1,0 +1,61 @@
+name: Smoke Tests (weekly)
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,mcp,duckdb]"
+
+      - name: Run smoke tests (real HTTP calls)
+        env:
+          SMOKE_TESTS: "1"
+        run: pytest tests/http/test_http_real.py -v --tb=short
+
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Find existing issue by title (no label filter — we create without labels)
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+            });
+            const existing = issues.find(i => i.title.includes("HTTP smoke test failed"));
+            if (existing) {
+              console.log("Issue already open: #" + existing.number);
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "⚠️ HTTP smoke test failed — upstream endpoint may have changed",
+              body: `The weekly smoke test (real HTTP calls) failed at ${new Date().toISOString()}.
+
+            This likely means an upstream endpoint (httpbin.org or similar)
+            has changed or is unavailable. Investigate and update tests or
+            register a new stable endpoint.
+
+            See the workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
+              labels: ["smoke-failure"],
+            });

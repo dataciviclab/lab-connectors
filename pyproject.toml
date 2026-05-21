@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lab-connectors"
-version = "0.9.0"
+version = "0.10.0"
 description = "Shared HTTP client, GCS path contract, and adapters for DataCivicLab"
 readme = "README.md"
 license = "MIT"
@@ -66,4 +66,9 @@ testpaths = ["tests"]
 markers = [
     "gcs: test che richiede connettività GCS (skippato di default)",
     "policy: regola non ovvia o comportamento cross-component",
+    "smoke: test che fa chiamate HTTP reali (richiede SMOKE_TESTS=1)",
+    "contract: interfaccia pubblica, artifact format, contratto API",
+    "regression: bug fix documentato in issue/PR",
+    "adapter: adapter a servizio esterno (nostro wrapping)",
+    "pure_unit: logica pura non banale isolata",
 ]
