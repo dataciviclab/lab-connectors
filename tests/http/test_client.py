@@ -6,6 +6,7 @@ Retry and SSL fallback logic is tested through mocked exceptions.
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import pytest
@@ -112,6 +113,7 @@ def test_post_errors(
 
 def test_post_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     """Retry opt-in: 5xx triggers retry only when retries>0."""
+    monkeypatch.setattr(time, "sleep", lambda secs: None)
     attempts: list[int] = []
 
     def fake_post(url: str, **kwargs: Any) -> _FakeResponse:
