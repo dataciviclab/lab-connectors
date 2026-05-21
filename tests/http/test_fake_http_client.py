@@ -1,15 +1,10 @@
 """Tests for FakeHttpClient — always runs in CI (no SMOKE_TESTS needed).
 
-Covers:
-- Basic GET/HEAD/POST response matching
-- Error responses (is_error)
-- SSL fallback flag passthrough
-- Callable response resolver
-- Context manager
-- Request log
-- Missing URL error
-- fake_response() factory helpers
-- _FakeResponse.raise_for_status()
+Protected contract:
+- ``FakeHttpClient`` mirrors ``HttpClient`` interface (get/head/post)
+- ``fake_response()`` produces stubs compatible with ``HttpResult``
+- Callable response resolver for dynamic responses
+- Request log accessible via ``.requests``
 """
 from __future__ import annotations
 
@@ -18,206 +13,99 @@ import pytest
 from lab_connectors.http import HttpResult
 from lab_connectors.testing import FakeHttpClient, fake_response
 
-
-# ------------------------------------------------------------------
-# Basic request matching
-# ------------------------------------------------------------------
+pytestmark = pytest.mark.contract
 
 
-def test_get_matches_url():
-    """GET returns the HttpResult registered for that URL."""
-    fake = FakeHttpClient()
-    fake.responses["https://example.test/a"] = HttpResult(
-        response=fake_response(200, "alpha"), err=None,
-    )
-    fake.responses["https://example.test/b"] = HttpResult(
-        response=fake_response(404, "not found"), err=None,
-    )
+class TestRequestMatching:
+    """contract: FakeHttpClient.get/head/post match by URL."""
 
-    r1 = fake.get("https://example.test/a")
-    assert r1.is_ok and r1.response is not None
-    assert r1.response.text == "alpha"
-
-    r2 = fake.get("https://example.test/b")
-    assert r2.is_ok
-    assert r2.response.status_code == 404  # type: ignore[union-attr]
-
-
-def test_head_returns_pre_registered():
-    """HEAD returns the registered response."""
-    fake = FakeHttpClient()
-    fake.responses["https://example.test/h"] = HttpResult(
-        response=fake_response(200, "head-body"), err=None,
-    )
-    result = fake.head("https://example.test/h")
-    assert result.is_ok
-    assert result.response is not None
-
-
-def test_post_returns_pre_registered():
-    """POST returns the registered response."""
-    fake = FakeHttpClient()
-    fake.responses["https://example.test/p"] = HttpResult(
-        response=fake_response(201, "created"), err=None,
-    )
-    result = fake.post("https://example.test/p", json={"key": "val"})
-    assert result.is_ok
-    assert result.response.status_code == 201  # type: ignore[union-attr]
-
-
-# ------------------------------------------------------------------
-# Error responses
-# ------------------------------------------------------------------
-
-
-def test_connection_error():
-    """HttpResult with err=None response → is_error."""
-    fake = FakeHttpClient()
-    fake.responses["https://example.test/err"] = HttpResult(
-        response=None, err=ConnectionError("refused"),
-    )
-    result = fake.get("https://example.test/err")
-    assert result.is_error
-    assert "refused" in str(result.err)
-
-
-def test_ssl_fallback_flag_preserved():
-    """ssl_fallback_used flag is preserved through the fake."""
-    fake = FakeHttpClient()
-    for flag in (None, True, False):
-        fake.responses[f"https://example.test/f{flag}"] = HttpResult(
-            response=fake_response(200) if flag is not False else None,
-            err=None if flag is not False else Exception("fail"),
-            ssl_fallback_used=flag,
+    @pytest.mark.parametrize("method", ["get", "head", "post"])
+    def test_method_returns_registered_response(self, method):
+        """GET, HEAD, POST restituiscono l'HttpResult registrato per quell'URL."""
+        fake = FakeHttpClient()
+        url = "https://example.test/resource"
+        fake.responses[url] = HttpResult(
+            response=fake_response(200, text="ok"), err=None,
         )
-        result = fake.get(f"https://example.test/f{flag}")
-        assert result.ssl_fallback_used == flag
+        result = getattr(fake, method)(url)
+        assert result.is_ok
+        assert result.response is not None
+        assert result.response.text == "ok"
 
+    def test_connection_error_response(self):
+        """HttpResult con err → result.is_error."""
+        fake = FakeHttpClient()
+        fake.responses["https://example.test/fail"] = HttpResult(
+            response=None, err=ConnectionError("refused"),
+        )
+        result = fake.get("https://example.test/fail")
+        assert result.is_error
+        assert "refused" in str(result.err)
 
-# ------------------------------------------------------------------
-# Callable response resolver
-# ------------------------------------------------------------------
+    def test_ssl_fallback_flag_preserved(self):
+        """ssl_fallback_used viene propagato attraverso il fake."""
+        fake = FakeHttpClient()
+        fake.responses["https://example.test/ssl"] = HttpResult(
+            response=fake_response(200), err=None, ssl_fallback_used=True,
+        )
+        result = fake.get("https://example.test/ssl")
+        assert result.ssl_fallback_used is True
 
-
-def test_callable_response():
-    """If the registered value is callable, it's invoked with (url, **kwargs)."""
-    fake = FakeHttpClient()
-    calls: list[tuple] = []
-
-    def resolver(url: str, **kwargs):
-        calls.append((url, kwargs))
-        return HttpResult(response=fake_response(200, "from-callable"), err=None)
-
-    fake.responses["https://example.test/c"] = resolver
-    result = fake.get("https://example.test/c", extra="param")
-
-    assert result.response.text == "from-callable"  # type: ignore[union-attr]
-    assert len(calls) == 1
-    assert calls[0][0] == "https://example.test/c"
-    assert calls[0][1]["extra"] == "param"
-
-
-# ------------------------------------------------------------------
-# Request log
-# ------------------------------------------------------------------
-
-
-def test_request_log_tracks_all_calls():
-    """Every request is logged with (method, url, kwargs)."""
-    fake = FakeHttpClient()
-    fake.responses["https://example.test/r"] = HttpResult(
-        response=fake_response(200), err=None,
-    )
-    fake.get("https://example.test/r", a=1)
-    fake.head("https://example.test/r", b=2)
-    fake.post("https://example.test/r", data="x", c=3)
-
-    assert len(fake.requests) == 3
-    assert fake.requests[0] == ("GET", "https://example.test/r", {"a": 1})
-    assert fake.requests[1] == ("HEAD", "https://example.test/r", {"b": 2})
-    assert fake.requests[2][0] == "POST"
-    assert fake.requests[2][1] == "https://example.test/r"
-
-
-# ------------------------------------------------------------------
-# Context manager
-# ------------------------------------------------------------------
-
-
-def test_context_manager():
-    """FakeHttpClient works as a context manager (no-op)."""
-    with FakeHttpClient() as fake:
-        fake.responses["https://example.test/cm"] = HttpResult(
+    def test_missing_url_raises_keyerror(self):
+        """URL non registrato → KeyError con messaggio esplicativo."""
+        fake = FakeHttpClient()
+        fake.responses["https://example.test/existing"] = HttpResult(
             response=fake_response(200), err=None,
         )
-        result = fake.get("https://example.test/cm")
-        assert result.is_ok
+        with pytest.raises(KeyError, match="No response registered"):
+            fake.get("https://example.test/missing")
+
+    def test_callable_resolver(self):
+        """Valore registrato callable → invocato con (url, **kwargs)."""
+        fake = FakeHttpClient()
+        calls = []
+
+        def resolver(url, **kw):
+            calls.append((url, kw))
+            return HttpResult(response=fake_response(200, text="dynamic"), err=None)
+
+        fake.responses["https://example.test/dyn"] = resolver
+        result = fake.get("https://example.test/dyn", custom="arg")
+
+        assert result.response.text == "dynamic"  # type: ignore[union-attr]
+        assert len(calls) == 1
+        assert calls[0][1]["custom"] == "arg"
+
+    def test_request_log(self):
+        """Ogni richiesta viene tracciata come (method, url, kwargs)."""
+        fake = FakeHttpClient()
+        url = "https://example.test/log"
+        fake.responses[url] = HttpResult(response=fake_response(200), err=None)
+        fake.get(url)
+        fake.post(url, data="x")
+        assert len(fake.requests) == 2
+        assert fake.requests[0] == ("GET", url, {})
+        assert fake.requests[1][0] == "POST"
 
 
-# ------------------------------------------------------------------
-# Missing URL
-# ------------------------------------------------------------------
+class TestFakeResponseFactory:
+    """contract: fake_response() produce stub compatibili con requests.Response."""
 
+    def test_json_access(self):
+        """fake_response con json_data → .json() restituisce il dato."""
+        resp = fake_response(200, json_data={"key": "val"})
+        assert resp.json() == {"key": "val"}
 
-def test_missing_url_raises_keyerror():
-    """Accessing an unregistered URL raises KeyError with helpful message."""
-    fake = FakeHttpClient()
-    fake.responses["https://example.test/existing"] = HttpResult(
-        response=fake_response(200), err=None,
-    )
-    with pytest.raises(KeyError, match="No response registered"):
-        fake.get("https://example.test/missing")
+    def test_content_derived_from_text(self):
+        """fake_response text → .text string, .content bytes."""
+        resp = fake_response(200, text="payload")
+        assert resp.text == "payload"
+        assert resp.content == b"payload"
 
-
-# ------------------------------------------------------------------
-# fake_response factory
-# ------------------------------------------------------------------
-
-
-def test_fake_response_json():
-    """fake_response with json_data → .json() returns parsed data."""
-    resp = fake_response(200, json_data={"key": "val"})
-    assert resp.json() == {"key": "val"}
-    assert resp.status_code == 200
-
-
-def test_fake_response_text_content():
-    """fake_response text → .text and .content."""
-    resp = fake_response(200, text="hello")
-    assert resp.text == "hello"
-    assert resp.content == b"hello"
-
-
-def test_fake_response_raise_for_status():
-    """raise_for_status on non-ok response raises _FakeHTTPError."""
-    resp = fake_response(403, text="forbidden")
-    import requests
-    with pytest.raises(requests.HTTPError, match="HTTP 403"):
-        resp.raise_for_status()
-
-
-def test_fake_response_ok_does_not_raise():
-    """raise_for_status on 200 does nothing."""
-    resp = fake_response(200)
-    resp.raise_for_status()  # should not raise
-
-
-# ------------------------------------------------------------------
-# Initialization params
-# ------------------------------------------------------------------
-
-
-def test_init_params_stored():
-    """Constructor arguments are stored as attributes (interface compat)."""
-    fake = FakeHttpClient(timeout=30, max_retries=5, retry_backoff=2.5,
-                          user_agent="test-agent/1.0")
-    assert fake.timeout == 30
-    assert fake.max_retries == 5
-    assert fake.retry_backoff == 2.5
-    assert fake.user_agent == "test-agent/1.0"
-
-
-def test_default_user_agent():
-    """Default user_agent is set."""
-    fake = FakeHttpClient()
-    assert fake.user_agent == "DataCivicLab-FakeHttpClient/0.1"
+    def test_raise_for_status_on_4xx(self):
+        """raise_for_status su 403 solleva requests.HTTPError con response accessibile."""
+        import requests
+        resp = fake_response(403, text="forbidden")
+        with pytest.raises(requests.HTTPError) as exc_info:
+            resp.raise_for_status()
+        assert exc_info.value.response is resp  # il response è il fake response

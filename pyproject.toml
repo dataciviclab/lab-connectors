@@ -67,4 +67,8 @@ markers = [
     "gcs: test che richiede connettività GCS (skippato di default)",
     "policy: regola non ovvia o comportamento cross-component",
     "smoke: test che fa chiamate HTTP reali (richiede SMOKE_TESTS=1)",
+    "contract: interfaccia pubblica, artifact format, contratto API",
+    "regression: bug fix documentato in issue/PR",
+    "adapter: adapter a servizio esterno (nostro wrapping)",
+    "pure_unit: logica pura non banale isolata",
 ]
