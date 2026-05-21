@@ -39,7 +39,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: "open",
-              labels: ["smoke-failure"],
+              labels: ["smoke-failure"],  // fine even if label doesn't exist yet
             });
             const existing = issues.find(i => i.title.includes("HTTP smoke test failed"));
             if (existing) {
@@ -57,5 +57,4 @@ jobs:
             register a new stable endpoint.
 
             See the workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
-              labels: ["smoke-failure"],
             });

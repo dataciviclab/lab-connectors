@@ -60,6 +60,15 @@ class FakeHttpClient:
         retry_backoff: float = 1.0,
         user_agent: str | None = None,
     ):
+        """Initialize the fake HTTP client.
+
+        Args:
+            timeout: Ignored (compatibility with ``HttpClient``).
+            max_retries: Ignored (compatibility).
+            retry_backoff: Ignored (compatibility).
+            user_agent: Ignored (compatibility).
+
+        """
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
@@ -105,9 +114,11 @@ class FakeHttpClient:
         """No-op. Compatible with HttpClient.close()."""
 
     def __enter__(self) -> FakeHttpClient:
+        """Enter context manager — returns self (no-op)."""
         return self
 
     def __exit__(self, *args: Any) -> None:
+        """Exit context manager — calls close() (no-op)."""
         self.close()
 
     # ------------------------------------------------------------------
@@ -169,6 +180,15 @@ class _FakeResponse:
         json_data: object = None,
         headers: dict[str, str] | None = None,
     ):
+        """Initialize the response stub.
+
+        Args:
+            status_code: HTTP status code.
+            text: Response body as text (``.content`` derived from it).
+            json_data: Optional parsed JSON for ``.json()``.
+            headers: Response headers dict.
+
+        """
         self.status_code = status_code
         self._text = text
         self._json_data = json_data
@@ -206,10 +226,11 @@ class _FakeResponse:
             raise _FakeHTTPError(self.status_code, self.text, response=self)
 
     def __enter__(self) -> _FakeResponse:
+        """Enter context manager — returns self (no-op)."""
         return self
 
     def __exit__(self, *args: Any) -> None:
-        pass
+        """Exit context manager — no-op."""
 
     def __repr__(self) -> str:
         return f"<_FakeResponse [{self.status_code}]>"
@@ -228,6 +249,14 @@ class _FakeHTTPError(requests.HTTPError):
 
     def __init__(self, status_code: int, text: str = "",
                  response: object = None):
+        """Initialize the HTTP error.
+
+        Args:
+            status_code: HTTP status code.
+            text: Response body (truncated for the message).
+            response: The response object (``_FakeResponse``) that caused the error.
+
+        """
         self.status_code = status_code
         super().__init__(f"HTTP {status_code}: {text[:50]}",
                          response=response)
