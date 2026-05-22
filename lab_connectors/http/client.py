@@ -66,8 +66,8 @@ class HttpClient:
                 Actual delay = backoff * 2^(attempt-1). Default 1.0.
             user_agent: Custom User-Agent string.
             retry_jitter: Randomisation factor for backoff delay (0.0 = no
-                jitter). Each sleep is multiplied by ``uniform(1, 1+jitter)``.
-                Es. 0.1 = ±10% variation. Disabled by default.
+                jitter). Each sleep is multiplied by ``uniform(1-jitter,
+                1+jitter)``. Es. 0.1 = ±10% variation. Disabled by default.
 
         """
         self.timeout = timeout
@@ -126,7 +126,7 @@ class HttpClient:
             if attempt > 0:
                 delay = self.retry_backoff * (2 ** (attempt - 1))
                 if self.retry_jitter > 0:
-                    delay = random.uniform(delay, delay * (1 + self.retry_jitter))
+                    delay *= random.uniform(1 - self.retry_jitter, 1 + self.retry_jitter)
                 time.sleep(delay)
 
             try:

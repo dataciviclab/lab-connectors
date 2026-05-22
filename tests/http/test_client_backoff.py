@@ -143,9 +143,9 @@ def test_jitter_applied_when_enabled(monkeypatch) -> None:
 
     monkeypatch.setattr(time, "sleep", fake_sleep)
 
-    # Fix random.uniform to return midpoint (deterministic)
+    # Fix random.uniform to return upper bound (max jitter)
     def fake_uniform(lo: float, hi: float) -> float:
-        return (lo + hi) / 2.0
+        return hi
 
     monkeypatch.setattr(random, "uniform", fake_uniform)
 
@@ -154,14 +154,15 @@ def test_jitter_applied_when_enabled(monkeypatch) -> None:
 
     monkeypatch.setattr(requests, "get", fake_get)
 
-    # retry_jitter=0.5 → delay * uniform(1, 1.5) → midpoint = delay * 1.25
+    # retry_jitter=0.5 → delay * uniform(0.5, 1.5) → returns hi = 1.5
+    # attempt 1: delay=1.0 → 1.0 * 1.5 = 1.5
+    # attempt 2: delay=2.0 → 2.0 * 1.5 = 3.0
     client = HttpClient(max_retries=3, retry_backoff=1.0, retry_jitter=0.5)
     client.get("https://example.test/jitter")
 
-    # base: 1.0, 2.0 → with jitter midpoint: 1.25, 2.5
     assert len(sleeps) == 2, f"got {len(sleeps)}"
-    assert abs(sleeps[0] - 1.25) < 0.01, f"got {sleeps[0]}"
-    assert abs(sleeps[1] - 2.5) < 0.01, f"got {sleeps[1]}"
+    assert abs(sleeps[0] - 1.5) < 0.01, f"got {sleeps[0]}"
+    assert abs(sleeps[1] - 3.0) < 0.01, f"got {sleeps[1]}"
 
 
 def test_default_jitter_no_random_called(monkeypatch) -> None:
