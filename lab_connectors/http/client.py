@@ -140,7 +140,7 @@ class HttpClient:
         # Build per-attempt timeout list
         if self.timeout_escalation:
             effective_retries = max(effective_retries, len(self.timeout_escalation))
-            timeout_by_attempt: list[int | float] = [
+            timeout_by_attempt: list[int | float | tuple[int, int]] = [
                 self.timeout_escalation[i] if i < len(self.timeout_escalation)
                 else self.timeout
                 for i in range(effective_retries)
@@ -355,12 +355,12 @@ class HttpClient:
         kwargs["headers"] = headers
 
         return self._execute(
-            "POST",
-            url,
+            "POST", url,
             lambda u, **kw: requests.post(u, data=data, json=json, **kw),
-            lambda u, exc, kw, to: self._post_ssl_fallback(u, data, json, exc, kw, attempt_timeout=to),
-            max(1, retries),
-            **kwargs,
+            lambda u, exc, kw, to: self._post_ssl_fallback(
+                u, data, json, exc, kw, attempt_timeout=to,
+            ),
+            max(1, retries), **kwargs,
         )
 
     def _post_ssl_fallback(
