@@ -5,9 +5,12 @@ import random
 import time
 from typing import Any
 
+import pytest
 import requests
 
 from lab_connectors.http import HttpClient
+
+pytestmark = pytest.mark.policy  # backoff, jitter e retry sono regole non ovvie
 
 
 class _FakeResponse:

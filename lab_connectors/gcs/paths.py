@@ -119,6 +119,10 @@ def mart_parquet(slug: str, year: int | str, table: str) -> str:
         slug: Dataset slug (es. ``ispra_ru_base``).
         year: Anno (int o stringa).
         table: Nome della tabella MART (es. ``costi_procapite``).
+
+    Returns:
+        Path relativo al bucket root, es. ``ispra_ru_base/2024/costi.parquet``.
+
     """
     return resolve("mart_parquet", slug=slug, year=str(year), table=table)
 

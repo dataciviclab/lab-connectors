@@ -15,6 +15,8 @@ import json
 import unittest
 from pathlib import Path
 
+import pytest
+
 from lab_connectors.gcs.paths import (
     CLEAN_BUCKET,
     MART_BUCKET,
@@ -27,6 +29,8 @@ from lab_connectors.gcs.paths import (
     pipeline_run,
     resolve,
 )
+
+pytestmark = pytest.mark.contract  # tutti i test verificano il path contract GCS
 
 
 class TestPathsContract(unittest.TestCase):
