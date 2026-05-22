@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lab-connectors"
-version = "0.10.0"
+version = "0.10.1"
 description = "Shared HTTP client, GCS path contract, and adapters for DataCivicLab"
 readme = "README.md"
 license = "MIT"
