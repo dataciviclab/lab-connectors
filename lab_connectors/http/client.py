@@ -54,20 +54,30 @@ class HttpClient:
         retry_backoff: float = 1.0,
         user_agent: str | None = None,
         retry_jitter: float = 0.0,
+        timeout_escalation: list[int | float] | None = None,
     ):
         """Initialize HttpClient.
 
         Args:
-            timeout: Request timeout in seconds.
+            timeout: Request timeout in seconds (fallback when
+                ``timeout_escalation`` is exhausted).
             max_retries: Number of attempts on transient errors (5xx, 429,
                 connection errors). Default 2 (2 total attempts: try once,
-                retry once on failure).
+                retry once on failure). When ``timeout_escalation`` is set,
+                effective attempts = max(max_retries, len(timeout_escalation)).
             retry_backoff: Base delay in seconds for exponential backoff.
                 Actual delay = backoff * 2^(attempt-1). Default 1.0.
             user_agent: Custom User-Agent string.
             retry_jitter: Randomisation factor for backoff delay (0.0 = no
                 jitter). Each sleep is multiplied by ``uniform(1-jitter,
                 1+jitter)``. Es. 0.1 = ±10% variation. Disabled by default.
+            timeout_escalation: List of timeout values in seconds for
+                progressive retry. If set, each attempt uses the next value
+                in the list (e.g. ``[30, 90, 180]`` → first attempt 30s,
+                second 90s, third 180s). Fallback to ``timeout`` when list
+                is exhausted. The number of attempts is at least
+                ``len(timeout_escalation)`` regardless of ``max_retries``.
+                Useful for sources that are known to be slow or variable.
 
         """
         self.timeout = timeout
@@ -75,6 +85,7 @@ class HttpClient:
         self.retry_backoff = retry_backoff
         self.retry_jitter = retry_jitter
         self.user_agent = user_agent or self.DEFAULT_USER_AGENT
+        self.timeout_escalation = timeout_escalation
 
         # Shared session for SSL fallback (connection pooling)
         self._session = requests.Session()
@@ -107,6 +118,10 @@ class HttpClient:
     ) -> HttpResult:
         """Execute an HTTP request with retry, backoff, and SSL fallback.
 
+        When ``timeout_escalation`` is set, each attempt uses a progressively
+        higher timeout. Attempts are at least ``len(timeout_escalation)``
+        even if ``effective_retries`` is lower.
+
         Args:
             method_name: HTTP method name for logging (e.g. "HEAD", "GET").
             url: The URL to request.
@@ -122,7 +137,20 @@ class HttpClient:
         last_err: Exception | None = None
         primary_exc: requests.exceptions.SSLError | None = None
 
+        # Build per-attempt timeout list
+        if self.timeout_escalation:
+            effective_retries = max(effective_retries, len(self.timeout_escalation))
+            timeout_by_attempt: list[int | float] = [
+                self.timeout_escalation[i] if i < len(self.timeout_escalation)
+                else self.timeout
+                for i in range(effective_retries)
+            ]
+        else:
+            timeout_by_attempt = [self.timeout] * effective_retries
+
         for attempt in range(effective_retries):
+            current_timeout = timeout_by_attempt[attempt]
+
             if attempt > 0:
                 delay = self.retry_backoff * (2 ** (attempt - 1))
                 if self.retry_jitter > 0:
@@ -130,7 +158,7 @@ class HttpClient:
                 time.sleep(delay)
 
             try:
-                response = request_fn(url, timeout=self.timeout, **kwargs)
+                response = request_fn(url, timeout=current_timeout, **kwargs)
             except requests.exceptions.SSLError as exc:
                 primary_exc = exc
                 logger.warning(
@@ -138,7 +166,7 @@ class HttpClient:
                     method_name, url, attempt + 1,
                 )
                 urllib3.disable_warnings(category=InsecureRequestWarning)
-                return ssl_fallback_fn(url, primary_exc, kwargs)
+                return ssl_fallback_fn(url, primary_exc, kwargs, current_timeout)
 
             except requests.exceptions.RequestException as exc:
                 last_err = exc
@@ -195,7 +223,7 @@ class HttpClient:
             "HEAD",
             url,
             lambda u, **kw: requests.head(u, **kw),
-            lambda u, exc, kw: self._head_ssl_fallback(u, exc, kw),
+            lambda u, exc, kw, to: self._head_ssl_fallback(u, exc, kw, attempt_timeout=to),
             max(1, self.max_retries),
             **kwargs,
         )
@@ -205,16 +233,18 @@ class HttpClient:
         url: str,
         primary_exc: requests.exceptions.SSLError,
         kwargs: dict[str, Any],
+        attempt_timeout: int | float | None = None,
     ) -> HttpResult:
         """SSL fallback for HEAD — strips allow_redirects to avoid collision."""
         fallback_kwargs = {
             k: v for k, v in kwargs.items()
             if k not in ("headers", "allow_redirects")
         }
+        to = attempt_timeout if attempt_timeout is not None else self.timeout
         try:
             response = self._session.head(
                 url,
-                timeout=self.timeout,
+                timeout=to,
                 allow_redirects=True,
                 verify=False,
                 **fallback_kwargs,
@@ -255,7 +285,7 @@ class HttpClient:
             "GET",
             url,
             lambda u, **kw: requests.get(u, **kw),
-            lambda u, exc, kw: self._get_ssl_fallback(u, exc, kw),
+            lambda u, exc, kw, to: self._get_ssl_fallback(u, exc, kw, attempt_timeout=to),
             max(1, self.max_retries),
             **kwargs,
         )
@@ -265,13 +295,15 @@ class HttpClient:
         url: str,
         primary_exc: requests.exceptions.SSLError,
         kwargs: dict[str, Any],
+        attempt_timeout: int | float | None = None,
     ) -> HttpResult:
         """SSL fallback for GET — strips 'verify' from kwargs to avoid collision."""
         fallback_kwargs = {k: v for k, v in kwargs.items() if k != "verify"}
+        to = attempt_timeout if attempt_timeout is not None else self.timeout
         try:
             response = self._session.get(
                 url,
-                timeout=self.timeout,
+                timeout=to,
                 verify=False,
                 **fallback_kwargs,
             )
@@ -326,7 +358,7 @@ class HttpClient:
             "POST",
             url,
             lambda u, **kw: requests.post(u, data=data, json=json, **kw),
-            lambda u, exc, kw: self._post_ssl_fallback(u, data, json, exc, kw),
+            lambda u, exc, kw, to: self._post_ssl_fallback(u, data, json, exc, kw, attempt_timeout=to),
             max(1, retries),
             **kwargs,
         )
@@ -338,15 +370,17 @@ class HttpClient:
         json: Any,
         primary_exc: requests.exceptions.SSLError,
         kwargs: dict[str, Any],
+        attempt_timeout: int | float | None = None,
     ) -> HttpResult:
         """SSL fallback for POST — strips 'verify' from kwargs."""
         fallback_kwargs = {k: v for k, v in kwargs.items() if k != "verify"}
+        to = attempt_timeout if attempt_timeout is not None else self.timeout
         try:
             response = self._session.post(
                 url,
                 data=data,
                 json=json,
-                timeout=self.timeout,
+                timeout=to,
                 verify=False,
                 **fallback_kwargs,
             )
