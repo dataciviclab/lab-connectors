@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import random
 import time
 from collections.abc import Callable
 from email.utils import parsedate_to_datetime
@@ -52,6 +53,7 @@ class HttpClient:
         max_retries: int = 2,
         retry_backoff: float = 1.0,
         user_agent: str | None = None,
+        retry_jitter: float = 0.0,
     ):
         """Initialize HttpClient.
 
@@ -63,11 +65,15 @@ class HttpClient:
             retry_backoff: Base delay in seconds for exponential backoff.
                 Actual delay = backoff * 2^(attempt-1). Default 1.0.
             user_agent: Custom User-Agent string.
+            retry_jitter: Randomisation factor for backoff delay (0.0 = no
+                jitter). Each sleep is multiplied by ``uniform(1, 1+jitter)``.
+                Es. 0.1 = ±10% variation. Disabled by default.
 
         """
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
+        self.retry_jitter = retry_jitter
         self.user_agent = user_agent or self.DEFAULT_USER_AGENT
 
         # Shared session for SSL fallback (connection pooling)
@@ -118,7 +124,10 @@ class HttpClient:
 
         for attempt in range(effective_retries):
             if attempt > 0:
-                time.sleep(self.retry_backoff * (2 ** (attempt - 1)))
+                delay = self.retry_backoff * (2 ** (attempt - 1))
+                if self.retry_jitter > 0:
+                    delay = random.uniform(delay, delay * (1 + self.retry_jitter))
+                time.sleep(delay)
 
             try:
                 response = request_fn(url, timeout=self.timeout, **kwargs)

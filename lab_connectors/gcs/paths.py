@@ -112,6 +112,17 @@ def catalog_manifest() -> str:
     return resolve("catalog_manifest")
 
 
+def mart_parquet(slug: str, year: int | str, table: str) -> str:
+    """Path ``{slug}/{year}/{table}.parquet`` nel bucket MART.
+
+    Args:
+        slug: Dataset slug (es. ``ispra_ru_base``).
+        year: Anno (int o stringa).
+        table: Nome della tabella MART (es. ``costi_procapite``).
+    """
+    return resolve("mart_parquet", slug=slug, year=str(year), table=table)
+
+
 __all__ = [
     "load_contract",
     "get_bucket",
@@ -122,4 +133,5 @@ __all__ = [
     "MART_BUCKET",
     "pipeline_run",
     "catalog_manifest",
+    "mart_parquet",
 ]
