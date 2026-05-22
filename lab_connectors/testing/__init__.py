@@ -59,6 +59,7 @@ class FakeHttpClient:
         max_retries: int = 2,
         retry_backoff: float = 1.0,
         user_agent: str | None = None,
+        retry_jitter: float = 0.0,
     ):
         """Initialize the fake HTTP client.
 
@@ -67,11 +68,13 @@ class FakeHttpClient:
             max_retries: Ignored (compatibility).
             retry_backoff: Ignored (compatibility).
             user_agent: Ignored (compatibility).
+            retry_jitter: Ignored (compatibility).
 
         """
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
+        self.retry_jitter = retry_jitter
         self.user_agent = user_agent or self.DEFAULT_USER_AGENT
 
         #: Map URL -> HttpResult or callable(url, **kwargs) -> HttpResult.

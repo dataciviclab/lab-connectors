@@ -15,6 +15,8 @@ import json
 import unittest
 from pathlib import Path
 
+import pytest
+
 from lab_connectors.gcs.paths import (
     CLEAN_BUCKET,
     MART_BUCKET,
@@ -23,9 +25,12 @@ from lab_connectors.gcs.paths import (
     gs_url,
     https_url,
     load_contract,
+    mart_parquet,
     pipeline_run,
     resolve,
 )
+
+pytestmark = pytest.mark.contract  # tutti i test verificano il path contract GCS
 
 
 class TestPathsContract(unittest.TestCase):
@@ -91,6 +96,7 @@ class TestPathsContract(unittest.TestCase):
             "catalog_inventory_latest",
             "catalog_inventory_report",
             "catalog_inventory_source_check",
+            "mart_parquet",
         ]
         patterns = self.contract["patterns"]
         for p in required:
@@ -226,6 +232,43 @@ class TestPathsContract(unittest.TestCase):
         self.assertEqual(
             catalog_manifest(),
             resolve("catalog_manifest"),
+        )
+
+    # ── mart_parquet ──────────────────────────────────────────────────────────
+
+    def test_resolve_mart_parquet(self) -> None:
+        result = resolve("mart_parquet", slug="ispra_ru_base", year=2024, table="costi")
+        self.assertEqual(result, "ispra_ru_base/2024/costi.parquet")
+
+    def test_resolve_mart_parquet_year_as_str(self) -> None:
+        result = resolve("mart_parquet", slug="t", year="2025", table="tabella")
+        self.assertEqual(result, "t/2025/tabella.parquet")
+
+    def test_mart_parquet_convenience(self) -> None:
+        result = mart_parquet("ispra_ru_base", 2024, "costi")
+        self.assertEqual(result, "ispra_ru_base/2024/costi.parquet")
+
+    def test_mart_parquet_convenience_year_str(self) -> None:
+        result = mart_parquet("slug", "2025", "tabella")
+        self.assertEqual(result, "slug/2025/tabella.parquet")
+
+    def test_mart_parquet_matches_resolve(self) -> None:
+        self.assertEqual(
+            mart_parquet("demo", 2024, "costi"),
+            resolve("mart_parquet", slug="demo", year=2024, table="costi"),
+        )
+
+    def test_gs_url_mart_parquet(self) -> None:
+        url = gs_url("mart", "mart_parquet", slug="demo", year=2024, table="costi")
+        self.assertEqual(
+            url, "gs://dataciviclab-mart/demo/2024/costi.parquet"
+        )
+
+    def test_https_url_mart_parquet(self) -> None:
+        url = https_url("mart", "mart_parquet", slug="demo", year=2024, table="costi")
+        self.assertEqual(
+            url,
+            "https://storage.googleapis.com/dataciviclab-mart/demo/2024/costi.parquet",
         )
 
     # ── Module-level constants ───────────────────────────────────────────────

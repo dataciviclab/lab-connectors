@@ -1,12 +1,16 @@
 """Minimal tests for backoff and 429 Retry-After in HttpClient."""
 from __future__ import annotations
 
+import random
 import time
 from typing import Any
 
+import pytest
 import requests
 
 from lab_connectors.http import HttpClient
+
+pytestmark = pytest.mark.policy  # backoff, jitter e retry sono regole non ovvie
 
 
 class _FakeResponse:
@@ -128,3 +132,57 @@ def test_post_respects_retry_backoff(monkeypatch) -> None:
     client.post("https://example.test/x", retries=2)
 
     assert sleeps == [1.0], f"got {sleeps}"
+
+
+def test_jitter_applied_when_enabled(monkeypatch) -> None:
+    """Jitter randomises backoff delay when retry_jitter > 0."""
+    sleeps = []
+
+    def fake_sleep(secs: float) -> None:
+        sleeps.append(secs)
+
+    monkeypatch.setattr(time, "sleep", fake_sleep)
+
+    # Fix random.uniform to return upper bound (max jitter)
+    def fake_uniform(lo: float, hi: float) -> float:
+        return hi
+
+    monkeypatch.setattr(random, "uniform", fake_uniform)
+
+    def fake_get(url: str, **kw: Any) -> _FakeResponse:
+        return _FakeResponse(503, b"down")
+
+    monkeypatch.setattr(requests, "get", fake_get)
+
+    # retry_jitter=0.5 → delay * uniform(0.5, 1.5) → returns hi = 1.5
+    # attempt 1: delay=1.0 → 1.0 * 1.5 = 1.5
+    # attempt 2: delay=2.0 → 2.0 * 1.5 = 3.0
+    client = HttpClient(max_retries=3, retry_backoff=1.0, retry_jitter=0.5)
+    client.get("https://example.test/jitter")
+
+    assert len(sleeps) == 2, f"got {len(sleeps)}"
+    assert abs(sleeps[0] - 1.5) < 0.01, f"got {sleeps[0]}"
+    assert abs(sleeps[1] - 3.0) < 0.01, f"got {sleeps[1]}"
+
+
+def test_default_jitter_no_random_called(monkeypatch) -> None:
+    """Default retry_jitter=0.0 does not call random.uniform."""
+    uniform_called = False
+
+    def fake_uniform(lo: float, hi: float) -> float:
+        nonlocal uniform_called
+        uniform_called = True
+        return (lo + hi) / 2.0
+
+    monkeypatch.setattr(random, "uniform", fake_uniform)
+    monkeypatch.setattr(time, "sleep", lambda secs: None)
+
+    def fake_get(url: str, **kw: Any) -> _FakeResponse:
+        return _FakeResponse(503, b"down")
+
+    monkeypatch.setattr(requests, "get", fake_get)
+
+    client = HttpClient(max_retries=3, retry_backoff=1.0)  # default jitter=0
+    client.get("https://example.test/no-jitter")
+
+    assert not uniform_called, "random.uniform should not be called with default jitter"

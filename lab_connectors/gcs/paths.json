@@ -14,6 +14,7 @@
     "catalog_signals": "catalog/catalog_signals.json",
     "catalog_inventory_latest": "catalog_inventory/catalog_inventory_latest.parquet",
     "catalog_inventory_report": "catalog_inventory/catalog_inventory_report.json",
-    "catalog_inventory_source_check": "catalog_inventory/source-check/source_check_results.parquet"
+    "catalog_inventory_source_check": "catalog_inventory/source-check/source_check_results.parquet",
+    "mart_parquet": "{slug}/{year}/{table}.parquet"
   }
 }

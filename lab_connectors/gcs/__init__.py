@@ -21,6 +21,7 @@ from lab_connectors.gcs.paths import (
     gs_url,
     https_url,
     load_contract,
+    mart_parquet,
     pipeline_run,
     resolve,
 )
@@ -42,4 +43,5 @@ __all__ = [
     "https_url",
     "pipeline_run",
     "catalog_manifest",
+    "mart_parquet",
 ]
