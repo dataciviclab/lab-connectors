@@ -114,13 +114,17 @@ class HttpClient:
         request_fn: Callable[..., requests.Response],
         ssl_fallback_fn: Callable[..., HttpResult],
         effective_retries: int,
+        escalation_allowed: bool = True,
         **kwargs: Any,
     ) -> HttpResult:
         """Execute an HTTP request with retry, backoff, and SSL fallback.
 
-        When ``timeout_escalation`` is set, each attempt uses a progressively
-        higher timeout. Attempts are at least ``len(timeout_escalation)``
-        even if ``effective_retries`` is lower.
+        When ``timeout_escalation`` is set and ``escalation_allowed`` is
+        True (default for GET/HEAD), each attempt uses a progressively
+        higher timeout and attempts are at least ``len(timeout_escalation)``.
+
+        POST sets ``escalation_allowed=False`` unless explicit ``retries``
+        are given, preserving the POST retry opt-in contract.
 
         Args:
             method_name: HTTP method name for logging (e.g. "HEAD", "GET").
@@ -128,6 +132,8 @@ class HttpClient:
             request_fn: Callable that performs the primary request.
             ssl_fallback_fn: Callable that performs the SSL fallback request.
             effective_retries: Number of total attempts (>= 1).
+            escalation_allowed: If True, timeout_escalation may increase
+                attempts. False for POST without explicit retries.
             **kwargs: Passed to request_fn.
 
         Returns:
@@ -138,7 +144,7 @@ class HttpClient:
         primary_exc: requests.exceptions.SSLError | None = None
 
         # Build per-attempt timeout list
-        if self.timeout_escalation:
+        if self.timeout_escalation and escalation_allowed:
             effective_retries = max(effective_retries, len(self.timeout_escalation))
             timeout_by_attempt: list[int | float | tuple[int, int]] = [
                 self.timeout_escalation[i] if i < len(self.timeout_escalation)
@@ -360,7 +366,9 @@ class HttpClient:
             lambda u, exc, kw, to: self._post_ssl_fallback(
                 u, data, json, exc, kw, attempt_timeout=to,
             ),
-            max(1, retries), **kwargs,
+            max(1, retries),
+            escalation_allowed=(retries > 0),
+            **kwargs,
         )
 
     def _post_ssl_fallback(

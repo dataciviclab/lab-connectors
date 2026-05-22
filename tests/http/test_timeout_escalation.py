@@ -137,11 +137,30 @@ def test_escalation_post_respects_retries(monkeypatch) -> None:
     monkeypatch.setattr(time, "sleep", lambda secs: None)
 
     client = HttpClient(timeout_escalation=[5, 15, 30])
-    # retries=1 → 2 attempts, but escalation needs at least 3 → 3 attempts
+    # retries=1 → escalation_allowed=True → max(2, 3) = 3 attempts
     result = client.post("https://example.test/post-escalate", retries=1)
 
     assert result.is_ok
     assert call_timeouts == [5, 15], f"got {call_timeouts}"
+
+
+def test_escalation_post_zero_retries_single_attempt(monkeypatch) -> None:
+    """POST with retries=0 ignores escalation — only one attempt."""
+    call_timeouts = []
+
+    def fake_post(url: str, **kw: Any) -> _FakeResponse:
+        call_timeouts.append(kw.get("timeout"))
+        raise requests.exceptions.Timeout("timed out")
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    monkeypatch.setattr(time, "sleep", lambda secs: None)
+
+    client = HttpClient(timeout=30, timeout_escalation=[5, 15, 30])
+    result = client.post("https://example.test/post-no-retry")
+
+    assert result.is_error
+    # Without escalation: single attempt with base timeout 30, not 5
+    assert call_timeouts == [30], f"got {call_timeouts}"
 
 
 # ---------------------------------------------------------------------------
