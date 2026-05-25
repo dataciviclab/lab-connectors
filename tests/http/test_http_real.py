@@ -1,7 +1,7 @@
 """Integration test: HttpClient against a real public endpoint.
 
 This test makes an actual HTTP GET request to a stable public service
-(``httpbin.org``) to verify that ``HttpClient`` works end-to-end with
+(``httpbun.com``) to verify that ``HttpClient`` works end-to-end with
 a real network stack — retry, timeout, SSL, and response parsing.
 
 The test is **skipped by default** (use ``SMOKE_TESTS=1`` env var to
@@ -20,28 +20,28 @@ from lab_connectors.http.types import HttpResult
 
 
 @pytest.mark.smoke
-def test_http_client_get_httpbin() -> None:
-    """GET httpbin.org/get → 200 + valid JSON with 'url' key."""
+def test_http_client_get_httpbun() -> None:
+    """GET httpbun.com/get → 200 + valid JSON with 'url' key."""
     _require_smoke_env()
 
     client = HttpClient(timeout=10, max_retries=1)
-    result = client.get("https://httpbin.org/get")
+    result = client.get("https://httpbun.com/get")
 
     _assert_result_ok(result)
     assert result.response is not None
     data = result.response.json()
     assert isinstance(data, dict)
     assert "url" in data
-    assert data["url"] == "https://httpbin.org/get"
+    assert data["url"] == "https://httpbun.com/get"
 
 
 @pytest.mark.smoke
-def test_http_client_head_httpbin() -> None:
-    """HEAD httpbin.org/get → 200."""
+def test_http_client_head_httpbun() -> None:
+    """HEAD httpbun.com/get → 200."""
     _require_smoke_env()
 
     client = HttpClient(timeout=10, max_retries=1)
-    result = client.head("https://httpbin.org/get")
+    result = client.head("https://httpbun.com/get")
 
     assert result.is_ok
     assert result.response is not None
@@ -54,7 +54,7 @@ def test_http_client_404_returns_is_ok_with_status() -> None:
     _require_smoke_env()
 
     client = HttpClient(timeout=10, max_retries=1)
-    result = client.get("https://httpbin.org/status/404")
+    result = client.get("https://httpbun.com/status/404")
 
     # HttpResult.is_ok means we got a response (not a network error)
     assert result.is_ok
@@ -64,11 +64,11 @@ def test_http_client_404_returns_is_ok_with_status() -> None:
 
 @pytest.mark.smoke
 def test_http_client_429_returns_too_many_requests() -> None:
-    """Simulate 429 via httpbin — response has status 429, not a network error."""
+    """Simulate 429 via httpbun — response has status 429, not a network error."""
     _require_smoke_env()
 
     client = HttpClient(timeout=10, max_retries=1)
-    result = client.get("https://httpbin.org/status/429")
+    result = client.get("https://httpbun.com/status/429")
 
     assert result.is_ok
     assert result.response is not None
