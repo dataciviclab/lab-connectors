@@ -6,6 +6,7 @@ Skappa di default se GCS non raggiungibile (pytest -m gcs).
 from __future__ import annotations
 
 import unittest
+from datetime import UTC
 from unittest.mock import MagicMock, patch
 
 from lab_connectors.gcs import check_public, list_objects, object_exists
@@ -156,11 +157,11 @@ class GcsListSdkPathTest(unittest.TestCase):
 
     def _make_mock_blob(self, name: str, size: int = 1024) -> object:
         """Crea un oggetto mock che simula un blob GCS."""
-        from datetime import datetime, timezone
+        from datetime import datetime
         blob = type("MockBlob", (), {})()
         blob.name = name
         blob.size = size
-        blob.updated = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        blob.updated = datetime(2026, 1, 1, tzinfo=UTC)
         return blob
 
     @patch("lab_connectors.gcs.client._get_storage_client")

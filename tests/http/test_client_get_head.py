@@ -12,6 +12,7 @@ import requests
 
 from lab_connectors.http import HttpClient
 from lab_connectors.http.types import HttpFallbackError
+
 from ..conftest import _FakeResponse
 
 pytestmark = pytest.mark.adapter

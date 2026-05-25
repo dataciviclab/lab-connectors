@@ -9,6 +9,7 @@ import pytest
 import requests
 
 from lab_connectors.http import HttpClient
+
 from ..conftest import _FakeResponse
 
 pytestmark = pytest.mark.policy  # backoff, jitter e retry sono regole non ovvie
