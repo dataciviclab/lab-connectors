@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev,mcp,duckdb]"
 
-      - name: Run smoke tests (real HTTP calls)
+      - name: Run smoke test (catalog manifest GCS)
         env:
           SMOKE_TESTS: "1"
         run: pytest tests/http/test_http_real.py -v --tb=short
@@ -35,13 +35,12 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
-            // Find existing issue by title (no label filter — we create without labels)
             const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: "open",
             });
-            const existing = issues.find(i => i.title.includes("HTTP smoke test failed"));
+            const existing = issues.find(i => i.title.includes("Catalog manifest smoke test failed"));
             if (existing) {
               console.log("Issue already open: #" + existing.number);
               return;
@@ -49,12 +48,15 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: "⚠️ HTTP smoke test failed — upstream endpoint may have changed",
-              body: `The weekly smoke test (real HTTP calls) failed at ${new Date().toISOString()}.
+              title: "⚠️ Catalog manifest smoke test failed",
+              body: `The weekly smoke test (GET catalog/manifest.json) failed at ${new Date().toISOString()}.
 
-            This likely means an upstream endpoint (httpbin.org or similar)
-            has changed or is unavailable. Investigate and update tests or
-            register a new stable endpoint.
+            This likely means:
+            - GCS bucket dataciviclab-clean is unreachable
+            - The manifest.json contract has changed
+            - There is a TLS or network issue
+
+            Investigate and either fix the endpoint or update the test.
 
             See the workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
               labels: ["smoke-failure"],
