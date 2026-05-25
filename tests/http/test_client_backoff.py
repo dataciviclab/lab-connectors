@@ -10,15 +10,9 @@ import requests
 
 from lab_connectors.http import HttpClient
 
+from ..conftest import _FakeResponse
+
 pytestmark = pytest.mark.policy  # backoff, jitter e retry sono regole non ovvie
-
-
-class _FakeResponse:
-    def __init__(self, status_code: int = 200, content: bytes = b"ok",
-                 headers: dict[str, str] | None = None) -> None:
-        self.status_code = status_code
-        self.content = content
-        self.headers = headers or {}
 
 
 def test_backoff_delays_on_retry(monkeypatch) -> None:

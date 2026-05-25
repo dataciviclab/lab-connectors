@@ -15,14 +15,7 @@ import requests
 from lab_connectors.http import HttpClient
 from lab_connectors.http.types import HttpFallbackError
 
-
-class _FakeResponse:
-    """Minimal response stub duck-typing requests.Response properties."""
-
-    def __init__(self, status_code: int = 200, content: bytes = b"ok") -> None:
-        self.status_code = status_code
-        self.content = content
-
+from ..conftest import _FakeResponse
 
 # ---------------------------------------------------------------------------
 # post() — success

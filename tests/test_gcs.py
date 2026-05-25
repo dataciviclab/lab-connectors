@@ -6,9 +6,33 @@ Skappa di default se GCS non raggiungibile (pytest -m gcs).
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from datetime import UTC
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from lab_connectors.gcs import check_public, list_objects, object_exists
+
+pytestmark = pytest.mark.adapter
+
+
+def _mock_gcs_sdk_modules() -> dict[str, MagicMock]:
+    """Crea mock per i moduli google.cloud.storage necessari al path SDK.
+
+    ``list_objects`` con auth=True/auth=None (SDK path) fa un import
+    interno ``from google.cloud.storage.retry import DEFAULT_RETRY``.
+    Questo helper crea i mock per evitare ModuleNotFoundError quando
+    google-cloud-storage non e' installato.
+
+    Returns:
+        Dict con i moduli mock da usare con ``patch.dict("sys.modules", ...)``.
+    """
+    return {
+        "google": MagicMock(),
+        "google.cloud": MagicMock(),
+        "google.cloud.storage": MagicMock(),
+        "google.cloud.storage.retry": MagicMock(),
+    }
 
 
 class GcsListObjectsTest(unittest.TestCase):
@@ -132,6 +156,61 @@ class GcsUploadTest(unittest.TestCase):
             list_objects("test-bucket", auth=True)
 
 
+class GcsListSdkPathTest(unittest.TestCase):
+    """list_objects — test del path SDK (auth=True e auth=None con SDK mock)."""
+
+    def _make_mock_blob(self, name: str, size: int = 1024) -> object:
+        """Crea un oggetto mock che simula un blob GCS."""
+        from datetime import datetime
+        blob = type("MockBlob", (), {})()
+        blob.name = name
+        blob.size = size
+        blob.updated = datetime(2026, 1, 1, tzinfo=UTC)
+        return blob
+
+    @patch("lab_connectors.gcs.client._get_storage_client")
+    def test_auth_true_with_sdk(self, mock_get_client):
+        """auth=True con SDK mock → lista blob usando il client SDK."""
+        mock_client = type("MockStorageClient", (), {})()
+        mock_client.list_blobs = lambda bucket, **kw: [
+            self._make_mock_blob("a/file1.parquet", 100),
+            self._make_mock_blob("a/file2.parquet", 200),
+        ]
+        mock_get_client.return_value = mock_client
+
+        with patch.dict("sys.modules", _mock_gcs_sdk_modules()):
+            results = list_objects("test-bucket", prefix="a/", auth=True)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["name"], "a/file1.parquet")
+        self.assertEqual(results[0]["size"], 100)
+        self.assertEqual(results[1]["name"], "a/file2.parquet")
+        self.assertEqual(results[1]["size"], 200)
+
+    @patch("lab_connectors.gcs.client._get_storage_client")
+    def test_auth_true_empty_result(self, mock_get_client):
+        """auth=True con SDK mock → bucket vuoto."""
+        mock_client = type("MockStorageClient", (), {})()
+        mock_client.list_blobs = lambda bucket, **kw: []
+        mock_get_client.return_value = mock_client
+
+        with patch.dict("sys.modules", _mock_gcs_sdk_modules()):
+            results = list_objects("test-bucket", auth=True)
+        self.assertEqual(results, [])
+
+    @patch("lab_connectors.gcs.client._get_storage_client")
+    def test_auth_none_sdk_available(self, mock_get_client):
+        """auth=None con SDK disponibile → usa SDK."""
+        mock_client = type("MockStorageClient", (), {})()
+        mock_client.list_blobs = lambda bucket, **kw: [
+            self._make_mock_blob("sdk/file.parquet"),
+        ]
+        mock_get_client.return_value = mock_client
+
+        with patch.dict("sys.modules", _mock_gcs_sdk_modules()):
+            results = list_objects("test-bucket", prefix="sdk/", auth=None)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "sdk/file.parquet")
+
 class GcsHttpPaginationTest(unittest.TestCase):
     """Test per la paginazione HTTP fallback (auth=None senza SDK)."""
 
@@ -189,6 +268,33 @@ class GcsHttpPaginationTest(unittest.TestCase):
         self.assertEqual(len(results), 4)
         self.assertIn("p1_0.parquet", [r["name"] for r in results])
         self.assertIn("p2_0.parquet", [r["name"] for r in results])
+
+    @patch("lab_connectors.gcs.client._get_storage_client")
+    @patch("lab_connectors.gcs.client.urlopen")
+    def test_auth_none_fallback_with_limit(self, mock_urlopen, mock_get_client):
+        """auth=None con limit → paginazione interrotta al raggiungimento del limite."""
+        import json
+        from io import BytesIO
+
+        mock_get_client.return_value = None
+
+        page = 0
+        def fake_open(url, **kw):
+            nonlocal page
+            page += 1
+            items = [{"name": f"p1_{i}.parquet", "size": "10",
+                       "updated": "2026-01-01T00:00:00Z"} for i in range(3)]
+            data = {"items": items, "nextPageToken": "token-p2"}
+            result = BytesIO(json.dumps(data).encode())
+            result.status = 200
+            return result
+
+        mock_urlopen.side_effect = fake_open
+
+        # limit=1 → solo 1 risultato, nonostante ci siano 3 nella prima pagina
+        results = list_objects("test-bucket", prefix="", limit=1, auth=None)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "p1_0.parquet")
 
 
 if __name__ == "__main__":

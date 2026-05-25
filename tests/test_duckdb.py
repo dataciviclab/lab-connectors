@@ -6,12 +6,16 @@
 """
 from __future__ import annotations
 
+import unittest.mock
+
 import pytest
 
 pytest.importorskip("duckdb")
 
 import duckdb
 from lab_connectors.duckdb import safe_connect
+
+pytestmark = pytest.mark.contract
 
 
 class TestSafeConnect:
@@ -71,3 +75,38 @@ class TestSafeConnectErrors:
         # La connessione deve essere chiusa
         with pytest.raises(duckdb.ConnectionException):
             con_ref.execute("SELECT 1")
+
+    def test_close_exception_is_silent(self) -> None:
+        """Se con.close() solleva eccezione, safe_connect la ingoia.
+
+        La finally di safe_connect prova con.close() ma se fallisce
+        (es. connessione gia' chiusa), cattura l'eccezione con
+        ``except Exception: pass``.
+
+        Patcheddiamo duckdb.DuckDBPyConnection.close (via class) per
+        far fallire TUTTE le close() durante il test e verifichiamo
+        che safe_connect esca pulito.
+        """
+        original_close = duckdb.DuckDBPyConnection.close
+
+        def _broken_close(self_conn: duckdb.DuckDBPyConnection) -> None:
+            """close() che solleva eccezione dopo aver chiamato l'originale."""
+            original_close(self_conn)
+            raise RuntimeError("simulated close failure")
+
+        with unittest.mock.patch.object(
+            duckdb.DuckDBPyConnection, "close", _broken_close,
+        ):
+            with safe_connect(":memory:") as con:
+                con.execute("SELECT 1")
+        # Il test passa se non c'e' eccezione — siamo usciti dal context manager
+
+    def test_already_closed_connection_is_silent(self) -> None:
+        """safe_connect non fallisce se la connessione e' gia' chiusa.
+
+        La finally chiama con.close() su una connessione gia' chiusa.
+        DuckDB solleva ConnectionException ma safe_connect la ingoia.
+        """
+        with safe_connect(":memory:") as con:
+            con.close()
+        # Il test passa — siamo usciti dal context manager
