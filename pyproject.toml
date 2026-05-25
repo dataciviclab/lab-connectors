@@ -63,6 +63,10 @@ disallow_untyped_defs = true
 module = "duckdb"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["google.cloud", "google.cloud.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--timeout=30"
