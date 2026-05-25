@@ -37,11 +37,11 @@ def test_http_client_get_httpbun() -> None:
 
 @pytest.mark.smoke
 def test_http_client_head_httpbun() -> None:
-    """HEAD httpbun.com/get → 200."""
+    """HEAD httpbun.com/status/200 → 200."""
     _require_smoke_env()
 
     client = HttpClient(timeout=10, max_retries=1)
-    result = client.head("https://httpbun.com/get")
+    result = client.head("https://httpbun.com/status/200")
 
     assert result.is_ok
     assert result.response is not None
