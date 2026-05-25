@@ -16,16 +16,12 @@ Usage::
 """
 from __future__ import annotations
 
-import typing
 from collections.abc import Callable
 from typing import Any
 
 import requests
 
 from lab_connectors.http.types import HttpResult
-
-if typing.TYPE_CHECKING:
-    import requests
 
 _ResponseOrCallable = HttpResult | Callable[..., HttpResult]
 
