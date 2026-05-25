@@ -9,7 +9,11 @@ import unittest
 from datetime import UTC
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from lab_connectors.gcs import check_public, list_objects, object_exists
+
+pytestmark = pytest.mark.adapter
 
 
 def _mock_gcs_sdk_modules() -> dict[str, MagicMock]:

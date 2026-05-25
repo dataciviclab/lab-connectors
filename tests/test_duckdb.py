@@ -15,6 +15,8 @@ pytest.importorskip("duckdb")
 import duckdb
 from lab_connectors.duckdb import safe_connect
 
+pytestmark = pytest.mark.contract
+
 
 class TestSafeConnect:
     """safe_connect — caso base."""
