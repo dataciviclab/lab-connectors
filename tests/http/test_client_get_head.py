@@ -12,18 +12,13 @@ import requests
 
 from lab_connectors.http import HttpClient
 from lab_connectors.http.types import HttpFallbackError
+from ..conftest import _FakeResponse
 
 pytestmark = pytest.mark.adapter
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-class _FakeResponse:
-    def __init__(self, status_code: int = 200, content: bytes = b"ok") -> None:
-        self.status_code = status_code
-        self.content = content
 
 
 def _patch_both_get(monkeypatch, fake_get) -> None:
