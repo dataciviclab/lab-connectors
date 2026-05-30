@@ -7,6 +7,8 @@ import pytest
 
 from lab_connectors.mcp.logging import get_mcp_logger
 
+pytestmark = pytest.mark.pure_unit
+
 
 class TestMcpLogger:
     def test_info_logs_message(self, caplog: pytest.LogCaptureFixture) -> None:

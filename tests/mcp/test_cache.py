@@ -3,7 +3,11 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from lab_connectors.mcp.cache import TtlCache
+
+pytestmark = pytest.mark.pure_unit
 
 
 class TestTtlCache:

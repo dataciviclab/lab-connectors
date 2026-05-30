@@ -1,7 +1,11 @@
 """Tests for lab_connectors.http.types."""
 from __future__ import annotations
 
+import pytest
+
 from lab_connectors.http.types import HttpFallbackError, HttpResult
+
+pytestmark = pytest.mark.pure_unit
 
 
 class TestHttpFallbackError:

@@ -1,7 +1,11 @@
 """Tests per lab_connectors.mcp.errors."""
 from __future__ import annotations
 
+import pytest
+
 from lab_connectors.mcp.errors import ErrorCode, McpError
+
+pytestmark = pytest.mark.pure_unit
 
 
 class TestErrorCode:
