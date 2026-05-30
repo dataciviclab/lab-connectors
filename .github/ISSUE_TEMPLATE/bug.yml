@@ -1,0 +1,27 @@
+name: Bug — lab-connectors
+description: Segnala un problema su lab-connectors (HTTP client, GCS paths, MCP core)
+labels: [bug]
+body:
+  - type: textarea
+    id: desc
+    attributes:
+      label: Descrizione
+      description: Cosa non funziona?
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Modulo
+      options:
+        - http/client
+        - gcs/paths
+        - mcp/server
+        - mcp/cache
+        - duckdb
+        - testing
+        - Altro
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passi per riprodurre
