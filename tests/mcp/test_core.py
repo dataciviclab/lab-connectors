@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from lab_connectors.mcp.core import DEFAULT_SLOW_MS, create_mcp_server, guard, guard_timed
 from lab_connectors.mcp.errors import ErrorCode, McpError
+
+pytestmark = pytest.mark.contract
 
 
 class TestCreateMcpServer:
