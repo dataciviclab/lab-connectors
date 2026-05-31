@@ -14,7 +14,9 @@ from __future__ import annotations
 import logging
 import re
 import urllib.parse
-from typing import Any
+from typing import Any, cast
+
+import requests
 
 from lab_connectors.http.client import HttpClient
 
@@ -38,7 +40,8 @@ def _sparql_post(
         )
         if result.is_error:
             return None
-        payload = result.response.json()
+        resp = cast(requests.Response, result.response)
+        payload = resp.json()
         return ((payload.get("results") or {}).get("bindings")) or []
     except Exception:
         return None
@@ -59,7 +62,7 @@ def _sparql_get(
         )
         if result.is_error:
             return None
-        resp = result.response
+        resp = cast(requests.Response, result.response)
         content_type = (resp.headers.get("Content-Type") or "").lower()
 
         if "sparql-results+xml" in content_type:
@@ -193,8 +196,9 @@ def _fetch_csv_page(
             },
         )
         if result.is_ok:
-            content_type = (result.response.headers.get("Content-Type") or "").lower()
-            body = result.response.content
+            resp = cast(requests.Response, result.response)
+            content_type = (resp.headers.get("Content-Type") or "").lower()
+            body = resp.content
             if "csv" in content_type or _looks_like_csv(body):
                 return body
     except Exception:
