@@ -142,10 +142,9 @@ def fetch_csv(
         # Query con LIMIT esplicito — una sola fetch, nessuna paginazione
         return _fetch_csv_page(endpoint, query, timeout)
 
-    # Prepara query con LIMIT e OFFSET
-    if not has_order:
-        query = query.rstrip().rstrip(";").rstrip()
-        query += "\nLIMIT {limit}\nOFFSET {offset}"
+    # Inietta LIMIT/OFFSET sempre (funziona sia con che senza ORDER BY)
+    query = query.rstrip().rstrip(";").rstrip()
+    query += "\nLIMIT {limit}\nOFFSET {offset}"
 
     all_csv_parts: list[bytes] = []
     for page in range(pages):
@@ -169,7 +168,8 @@ def fetch_csv(
         if len(csv_bytes.split(b"\n")) < limit_value + 2:
             break
 
-    return b"".join(all_csv_parts)
+    # Concatena con newline tra le parti
+    return b"\n".join(all_csv_parts)
 
 
 def _fetch_csv_page(
