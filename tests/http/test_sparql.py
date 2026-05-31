@@ -12,9 +12,9 @@ from unittest.mock import patch
 import pytest
 
 from lab_connectors.http.sparql import (
+    _binding_value,
     _bindings_to_csv,
     _build_schema_list,
-    _binding_value,
     _compact_uri,
     _ensure_str_list,
     _looks_like_csv,
@@ -25,6 +25,7 @@ from lab_connectors.http.sparql import (
 )
 
 
+@pytest.mark.pure_unit
 class TestPureFunctions:
     """Funzioni di utilità pura (nessuna HTTP)."""
 
@@ -107,6 +108,7 @@ class TestPureFunctions:
         assert lines[2] == "2,y"
 
 
+@pytest.mark.contract
 @patch("lab_connectors.http.sparql.execute_sparql")
 class TestDiscoverGraphs:
     """discover_graphs() con execute_sparql mockato."""
@@ -143,6 +145,7 @@ class TestDiscoverGraphs:
         assert len(graphs) == 2
 
 
+@pytest.mark.contract
 @patch("lab_connectors.http.sparql.execute_sparql")
 class TestInferSchema:
     """infer_schema() con execute_sparql mockato."""
@@ -161,6 +164,7 @@ class TestInferSchema:
         assert infer_schema("https://ex.test/sparql", "http://ex.test/g1") == []
 
 
+@pytest.mark.contract
 class TestFetchCsvPagination:
     """Logica di paginazione di fetch_csv() — testata senza HTTP."""
 
@@ -253,6 +257,7 @@ class TestFetchCsvPagination:
                                  "val0", "val1", "val2", "val3", "val4"]
 
 
+@pytest.mark.contract
 class TestExecuteSparqlErrorHandling:
     """execute_sparql() — solo edge case di errore."""
 

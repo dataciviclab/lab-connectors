@@ -22,8 +22,6 @@ log = logging.getLogger(__name__)
 
 # Regex per individuare LIMIT/OFFSET già presenti in una query SPARQL
 _RE_HAS_LIMIT = re.compile(r"\bLIMIT\s+\d+", re.IGNORECASE)
-_RE_HAS_OFFSET = re.compile(r"\bOFFSET\s+\d+", re.IGNORECASE)
-_RE_HAS_ORDER = re.compile(r"\bORDER\s+BY", re.IGNORECASE)
 
 
 def _sparql_post(
@@ -94,6 +92,7 @@ def execute_sparql(
 
     Raises:
         RuntimeError: se POST e GET falliscono entrambi.
+
     """
     client = HttpClient(timeout=timeout)
 
@@ -133,9 +132,9 @@ def fetch_csv(
 
     Returns:
         CSV bytes con header.
+
     """
     has_custom_limit = bool(_RE_HAS_LIMIT.search(query))
-    has_order = bool(_RE_HAS_ORDER.search(query))
     limit_value = step
 
     if has_custom_limit:
@@ -228,10 +227,10 @@ def _looks_like_csv(data: bytes) -> bool:
 
 
 def _bindings_to_csv(bindings: list[dict[str, Any]]) -> bytes:
-    """Converte bindings SPARQL Results JSON in CSV bytes.
+    """Convert SPARQL Results JSON bindings to CSV bytes.
 
-    Usa il primo binding per determinare le colonne,
-    poi estrae i valori `.value` da ogni variabile.
+    Uses the first binding to determine columns,
+    then extracts `.value` from each variable.
     """
     import csv
     import io
@@ -272,6 +271,7 @@ def discover_graphs(
 
     Returns:
         Lista di URI dei named graphs, ordinati alfabeticamente.
+
     """
     query = """
     SELECT DISTINCT ?g
@@ -317,6 +317,7 @@ def infer_schema(
     Returns:
         Lista di dict: {pred, compact_name, count}
         Ordinati per count decrescente.
+
     """
     query = f"""
     SELECT ?pred (COUNT(DISTINCT ?s) as ?cnt)
