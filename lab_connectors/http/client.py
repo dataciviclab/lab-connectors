@@ -82,15 +82,16 @@ class HttpClient:
         self._session.headers["User-Agent"] = self.user_agent
 
         # Proxy support from environment variables (HTTP_PROXY, HTTPS_PROXY)
-        proxy = (
+        self._proxy: dict[str, str] | None = None
+        proxy_url = (
             os.environ.get("HTTPS_PROXY")
             or os.environ.get("https_proxy")
             or os.environ.get("HTTP_PROXY")
             or os.environ.get("http_proxy")
         )
-        if proxy:
-            self._session.proxies = {"http": proxy, "https": proxy}
-            logger.info("HttpClient using proxy: %s", proxy)
+        if proxy_url:
+            self._proxy = {"http": proxy_url, "https": proxy_url}
+            logger.info("HttpClient using proxy: %s", proxy_url)
 
     def close(self) -> None:
         """Close the underlying session and release connection pool resources."""
@@ -142,7 +143,7 @@ class HttpClient:
                 time.sleep(delay)
 
             try:
-                response = request_fn(url, timeout=self.timeout, **kwargs)
+                response = request_fn(url, timeout=self.timeout, proxies=self._proxy, **kwargs)
             except requests.exceptions.SSLError as exc:
                 primary_exc = exc
                 logger.warning(
