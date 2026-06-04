@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import os
 import random
 import time
 from collections.abc import Callable
@@ -79,6 +80,17 @@ class HttpClient:
         # Shared session for SSL fallback (connection pooling)
         self._session = requests.Session()
         self._session.headers["User-Agent"] = self.user_agent
+
+        # Proxy support from environment variables (HTTP_PROXY, HTTPS_PROXY)
+        proxy = (
+            os.environ.get("HTTPS_PROXY")
+            or os.environ.get("https_proxy")
+            or os.environ.get("HTTP_PROXY")
+            or os.environ.get("http_proxy")
+        )
+        if proxy:
+            self._session.proxies = {"http": proxy, "https": proxy}
+            logger.info("HttpClient using proxy: %s", proxy)
 
     def close(self) -> None:
         """Close the underlying session and release connection pool resources."""
