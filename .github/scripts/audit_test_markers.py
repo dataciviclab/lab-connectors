@@ -1,14 +1,27 @@
 #!/usr/bin/env python3
 """Backward-compatibility shim — delegates to ``lab_connectors.testing.audit_markers``.
 
-This script exists so workflows that reference ``.github/scripts/audit_test_markers.py``
-continue to work.  New code should use the ``audit-test-markers`` CLI command directly
-(installed via lab-connectors ``[project.scripts]``).
+If ``lab-connectors`` is not installed, prints a clear error and exits.
 
-Remove this shim once all repos have migrated to the CLI command.
+New code should use ``audit-test-markers`` CLI command directly
+(installed via ``pip install lab-connectors``).
 """
 
-from lab_connectors.testing.audit_markers import main
+import sys
+
+try:
+    from lab_connectors.testing.audit_markers import main
+except ImportError:
+    print(
+        "ERROR: lab-connectors not installed.\n"
+        "\n"
+        "This script requires lab-connectors to be installed:\n"
+        "  pip install lab-connectors\n"
+        "\n"
+        "Or use the audit-test-markers CLI directly after installation.",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
 if __name__ == "__main__":
     raise SystemExit(main())
