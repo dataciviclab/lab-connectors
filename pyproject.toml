@@ -16,6 +16,9 @@ dependencies = [
     "urllib3>=2.0.0",
 ]
 
+[project.scripts]
+audit-test-markers = "lab_connectors.testing.audit_markers:main"
+
 [project.optional-dependencies]
 mcp = [
     "mcp>=1.0.0",
