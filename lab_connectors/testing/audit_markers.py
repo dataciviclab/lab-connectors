@@ -43,6 +43,7 @@ class TestCollector(ast.NodeVisitor):
     __test__ = False  # prevent pytest from collecting this as a test class
 
     def __init__(self) -> None:
+        """Initialize the collector with empty results and no module-level markers."""
         self.results: list[dict[str, Any]] = []
         self._module_markers: set[str] = set()
 
@@ -116,6 +117,7 @@ def collect_tests(tests_dir: Path, file_filter: list[str] | None = None) -> list
 
     Returns:
         List of dicts with keys ``test``, ``markers``, ``missing``, ``unmarked``, ``file``.
+
     """
     results: list[dict[str, Any]] = []
 
@@ -194,6 +196,7 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         0 if all tests have markers (or ``--diff`` not set),
         1 if any test is unmarked (only with ``--diff``).
+
     """
     parser = build_parser()
     args = parser.parse_args(argv)

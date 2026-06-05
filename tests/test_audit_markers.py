@@ -13,12 +13,10 @@ import pytest
 
 from lab_connectors.testing.audit_markers import (
     MARKERS,
-    TestCollector,
     build_parser,
     collect_tests,
     main,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,7 +36,7 @@ def _write_test(p: Path, name: str, body: str) -> Path:
 
 class TestTestCollector:
     @pytest.mark.pure_unit
-    def test_detects_marker_on_function(self, tmp_path: Path):
+    def test_detects_marker_on_function(self, tmp_path: Path) -> None:
         src = """
 import pytest
 
@@ -49,7 +47,7 @@ def test_something():
 def test_isolated():
     pass
 """
-        f = _write_test(tmp_path, "test_example.py", src)
+        _write_test(tmp_path, "test_example.py", src)
         results = collect_tests(tmp_path)
         assert len(results) == 2
         by_name = {r["test"]: r for r in results}
@@ -58,7 +56,7 @@ def test_isolated():
         assert by_name["test_isolated"]["markers"] == ["pure_unit"]
 
     @pytest.mark.pure_unit
-    def test_module_level_marker(self, tmp_path: Path):
+    def test_module_level_marker(self, tmp_path: Path) -> None:
         src = """
 import pytest
 
@@ -78,7 +76,7 @@ def test_another_api():
             assert "contract" in r["markers"]
 
     @pytest.mark.pure_unit
-    def test_module_level_marker_list(self, tmp_path: Path):
+    def test_module_level_marker_list(self, tmp_path: Path) -> None:
         src = """
 import pytest
 
@@ -93,7 +91,7 @@ def test_multi():
         assert results[0]["markers"] == ["contract", "smoke"]
 
     @pytest.mark.pure_unit
-    def test_class_based_tests(self, tmp_path: Path):
+    def test_class_based_tests(self, tmp_path: Path) -> None:
         src = """
 import pytest
 
@@ -113,7 +111,7 @@ class TestSuite:
         assert by_name["test_unmarked_in_class"]["unmarked"] is True
 
     @pytest.mark.pure_unit
-    def test_skips_conftest(self, tmp_path: Path):
+    def test_skips_conftest(self, tmp_path: Path) -> None:
         _write_test(tmp_path, "conftest.py", "def pytest_configure(): pass")
         _write_test(tmp_path, "test_real.py", "def test_thing(): pass")
         results = collect_tests(tmp_path)
@@ -121,7 +119,7 @@ class TestSuite:
         assert results[0]["test"] == "test_thing"
 
     @pytest.mark.pure_unit
-    def test_file_filter(self, tmp_path: Path):
+    def test_file_filter(self, tmp_path: Path) -> None:
         _write_test(tmp_path, "test_a.py", "def test_a(): pass")
         _write_test(tmp_path, "test_b.py", "def test_b(): pass")
         results = collect_tests(tmp_path, file_filter=["test_a.py"])
@@ -129,7 +127,7 @@ class TestSuite:
         assert results[0]["test"] == "test_a"
 
     @pytest.mark.pure_unit
-    def test_ignores_non_marker_decorators(self, tmp_path: Path):
+    def test_ignores_non_marker_decorators(self, tmp_path: Path) -> None:
         src = """
 import pytest
 
@@ -146,7 +144,7 @@ def test_with_fixture(fix):
         assert results[0]["markers"] == ["pure_unit"]
 
     @pytest.mark.pure_unit
-    def test_subdirectory_tests(self, tmp_path: Path):
+    def test_subdirectory_tests(self, tmp_path: Path) -> None:
         sub = tmp_path / "http"
         sub.mkdir()
         _write_test(tmp_path, "test_root.py", "def test_root(): pass")
@@ -169,13 +167,13 @@ def test_http_call(): pass
 
 class TestMain:
     @pytest.mark.pure_unit
-    def test_no_args_shows_help(self):
+    def test_no_args_shows_help(self) -> None:
         with pytest.raises(SystemExit) as exc:
             main([])
         assert exc.value.code == 2  # argparse error
 
     @pytest.mark.pure_unit
-    def test_ok_all_marked(self, tmp_path: Path):
+    def test_ok_all_marked(self, tmp_path: Path) -> None:
         _write_test(tmp_path, "test_ok.py", """
 import pytest
 @pytest.mark.pure_unit
@@ -185,13 +183,13 @@ def test_ok(): pass
         assert code == 0
 
     @pytest.mark.pure_unit
-    def test_diff_exits_1_on_unmarked(self, tmp_path: Path):
+    def test_diff_exits_1_on_unmarked(self, tmp_path: Path) -> None:
         _write_test(tmp_path, "test_bad.py", "def test_bad(): pass")
         code = main([str(tmp_path), "--diff"])
         assert code == 1
 
     @pytest.mark.pure_unit
-    def test_diff_ok_when_marked(self, tmp_path: Path):
+    def test_diff_ok_when_marked(self, tmp_path: Path) -> None:
         _write_test(tmp_path, "test_good.py", """
 import pytest
 @pytest.mark.contract
@@ -201,7 +199,7 @@ def test_good(): pass
         assert code == 0
 
     @pytest.mark.pure_unit
-    def test_json_output(self, tmp_path: Path, capsys):
+    def test_json_output(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         _write_test(tmp_path, "test_json.py", "def test_json(): pass")
         code = main([str(tmp_path), "--json"])
         assert code == 0
@@ -212,12 +210,12 @@ def test_good(): pass
         assert data["unmarked"] == 1
 
     @pytest.mark.pure_unit
-    def test_bad_directory(self):
+    def test_bad_directory(self) -> None:
         code = main(["/nonexistent/path"])
         assert code == 2
 
     @pytest.mark.pure_unit
-    def test_file_filter_via_cli(self, tmp_path: Path):
+    def test_file_filter_via_cli(self, tmp_path: Path) -> None:
         _write_test(tmp_path, "test_a.py", "def test_a(): pass")
         _write_test(tmp_path, "test_b.py", """
 import pytest
@@ -237,12 +235,12 @@ def test_b(): pass
 
 class TestModuleContract:
     @pytest.mark.contract
-    def test_markers_set_is_complete(self):
+    def test_markers_set_is_complete(self) -> None:
         """MARKERS contiene esattamente i 6 marker ufficiali."""
         assert MARKERS == {"contract", "policy", "regression", "adapter", "pure_unit", "smoke"}
 
     @pytest.mark.contract
-    def test_build_parser_returns_parser(self):
+    def test_build_parser_returns_parser(self) -> None:
         parser = build_parser()
         assert parser is not None
         args = parser.parse_args(["/some/dir", "--diff", "--json", "--files", "a.py", "b.py"])
@@ -252,7 +250,7 @@ class TestModuleContract:
         assert args.files == ["a.py", "b.py"]
 
     @pytest.mark.contract
-    def test_collect_tests_returns_list(self, tmp_path: Path):
+    def test_collect_tests_returns_list(self, tmp_path: Path) -> None:
         _write_test(tmp_path, "test_contract.py", "def test_empty(): pass")
         results = collect_tests(tmp_path)
         assert isinstance(results, list)
