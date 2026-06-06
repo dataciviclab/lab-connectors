@@ -91,11 +91,96 @@ def https_url(bucket_key: str, pattern_key: str, **kwargs: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# GCS URL parsing
+# ---------------------------------------------------------------------------
+
+
+def parse_gs_url(url: str) -> tuple[str, str]:
+    """Analizza un URL ``gs://`` in (bucket, key).
+
+    Args:
+        url: URL del tipo ``gs://dataciviclab-clean/demo/2024/file.parquet``.
+
+    Returns:
+        Tupla ``(bucket, key)`` — es. ``("dataciviclab-clean", "demo/2024/file.parquet")``.
+
+    Raises:
+        ValueError: se l'URL non inizia con ``gs://``.
+
+
+    Example::
+
+        >>> parse_gs_url("gs://bucket/path/to/file.parquet")
+        ("bucket", "path/to/file.parquet")
+
+    """
+    if not url.startswith("gs://"):
+        raise ValueError(f"URL deve iniziare con gs://, ricevuto: {url}")
+    rest = url[5:]  # rimuovi 'gs://'
+    bucket, sep, key = rest.partition("/")
+    if not sep:
+        raise ValueError(f"URL gs:// senza path: {url}")
+    return (bucket, key)
+
+
+# ---------------------------------------------------------------------------
 # Bucket names (costanti — corrispondono a paths.json)
 # ---------------------------------------------------------------------------
 
 CLEAN_BUCKET: str = get_bucket("clean")
 MART_BUCKET: str = get_bucket("mart")
+
+# ---------------------------------------------------------------------------
+# Glob pattern → regex
+# ---------------------------------------------------------------------------
+
+
+def glob_to_regex(pattern: str) -> str:
+    r"""Convert a glob pattern to regex.
+
+    Supporta ``*`` (qualsiasi sequenza), ``**`` (qualsiasi profondità),
+    e ``?`` (un carattere).
+
+    Args:
+        pattern: Pattern glob (es. ``"candidates/*/dataset.yml"``).
+
+    Returns:
+        Stringa regex (es. ``"candidates/[^/]*/dataset\.yml"``).
+
+    Example::
+
+        >>> import re
+        >>> rx = glob_to_regex("*.parquet")
+        >>> re.match(rx, "data.parquet") is not None
+        True
+
+    """
+    parts: list[str] = []
+    i = 0
+    n = len(pattern)
+    while i < n:
+        c = pattern[i]
+        if c == "*" and i + 1 < n and pattern[i + 1] == "*":
+            # ** = qualsiasi profondità
+            parts.append(".*")
+            i += 2
+            # skip eventuale /
+            if i < n and pattern[i] == "/":
+                i += 1
+        elif c == "*":
+            parts.append("[^/]*")
+            i += 1
+        elif c == "?":
+            parts.append(".")
+            i += 1
+        elif c in ".^$+{}[]\\|()":
+            parts.append("\\" + c)
+            i += 1
+        else:
+            parts.append(c)
+            i += 1
+    return "".join(parts)
+
 
 # ---------------------------------------------------------------------------
 # Convenience functions usate dai consumer
@@ -133,6 +218,8 @@ __all__ = [
     "resolve",
     "gs_url",
     "https_url",
+    "parse_gs_url",
+    "glob_to_regex",
     "CLEAN_BUCKET",
     "MART_BUCKET",
     "pipeline_run",
