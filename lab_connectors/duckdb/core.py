@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 # ── Configurazione DuckDB per bucket GCS pubblici via S3-compatible API ───────
@@ -77,3 +78,34 @@ def safe_connect(
             con.close()
         except Exception:
             pass
+
+
+def _is_s3_path(path: str | Path) -> bool:
+    """True se il path inizia con ``s3://`` (GCS via DuckDB httpfs).
+
+    Rileva anche ``s3:/`` (``Path()`` normalizza ``//`` in ``/``).
+    """
+    s = str(path)
+    return s.startswith("s3://") or s.startswith("s3:/")
+
+
+@contextmanager
+def gcs_connect(path: str | Path, **kwargs: Any) -> Generator[Any, None, None]:
+    """Context manager DuckDB per leggere parquet su GCS pubblico o locale.
+
+    - Se il path inizia con ``s3://``: fa ``safe_connect(extensions=["httpfs"], config=GCS_S3_CONFIG)``
+    - Altrimenti: fa ``safe_connect()`` (niente httpfs)
+
+    Args:
+        path: Path al parquet (``s3://dataciviclab-clean/...`` o path locale).
+        **kwargs: Argomenti aggiuntivi passati a ``safe_connect``.
+
+    Yields:
+        duckdb.DuckDBPyConnection — connessione aperta.
+    """
+    if _is_s3_path(path):
+        with safe_connect(extensions=["httpfs"], config=GCS_S3_CONFIG, **kwargs) as con:
+            yield con
+    else:
+        with safe_connect(**kwargs) as con:
+            yield con
