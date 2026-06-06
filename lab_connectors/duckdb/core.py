@@ -27,7 +27,6 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
 
-
 # ── Configurazione DuckDB per bucket GCS pubblici via S3-compatible API ───────
 # Serve perche' DuckDB httpfs legge GCS tramite API S3, con endpoint
 # storage.googleapis.com. Senza questa config, DuckDB prova AWS S3 e fallisce 404.
