@@ -172,6 +172,7 @@ class TestGcsConnect:
             r = con.execute("SELECT v FROM t").fetchall()
         assert r == [(42,)]
 
+    @pytest.mark.smoke
     def test_s3_uri_loads_httpfs(self) -> None:
         """Path s3:// carica estensione httpfs con GCS config."""
         s3 = "s3://dataciviclab-clean/catalog_inventory/catalog_inventory_latest.parquet"
