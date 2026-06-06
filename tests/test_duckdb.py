@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("duckdb")
 
 import duckdb
-from lab_connectors.duckdb import safe_connect
+from lab_connectors.duckdb import gcs_connect, safe_connect
 
 pytestmark = pytest.mark.contract
 
@@ -151,3 +151,66 @@ class TestSafeConnectExtensions:
         with pytest.raises(duckdb.IOException):
             with safe_connect(extensions=["nonexistent_extension_xyz"]):
                 pass
+
+
+class TestGcsConnect:
+    """gcs_connect — helper per GCS S3 / locale."""
+
+    def test_local_path_uses_plain_safe_connect(self) -> None:
+        """Path locale non carica httpfs."""
+        with gcs_connect(":memory:") as con:
+            r = con.execute("SELECT 1 AS x").fetchall()
+        assert r == [(1,)]
+
+    def test_local_file_database(self, tmp_path: pytest.TempPathFactory) -> None:
+        """gcs_connect con database DuckDB su file."""
+        db_path = tmp_path / "test.duckdb"
+        with gcs_connect("/local/file.parquet", database=str(db_path)) as con:
+            con.execute("CREATE TABLE t (v INTEGER)")
+            con.execute("INSERT INTO t VALUES (42)")
+        with gcs_connect("/local/file.parquet", database=str(db_path)) as con:
+            r = con.execute("SELECT v FROM t").fetchall()
+        assert r == [(42,)]
+
+    def test_s3_uri_loads_httpfs(self) -> None:
+        """Path s3:// carica estensione httpfs con GCS config."""
+        s3 = "s3://dataciviclab-clean/catalog_inventory/catalog_inventory_latest.parquet"
+        try:
+            with gcs_connect(s3) as con:
+                row = con.execute(
+                    f"SELECT COUNT(*) FROM read_parquet('{s3}')"
+                ).fetchone()
+                assert row is not None and row[0] > 0
+        except duckdb.IOException as exc:
+            if "HTTP" in str(exc) or "404" in str(exc):
+                pytest.skip("GCS S3 endpoint not reachable from this runner")
+            raise
+
+
+class TestIsS3Path:
+    """_is_s3_path — detection URI S3."""
+
+    def test_s3_double_slash(self) -> None:
+        from lab_connectors.duckdb.core import _is_s3_path
+
+        assert _is_s3_path("s3://bucket/key.parquet") is True
+
+    def test_s3_single_slash_normalized(self) -> None:
+        from lab_connectors.duckdb.core import _is_s3_path
+
+        assert _is_s3_path("s3:/bucket/key.parquet") is True
+
+    def test_local_path_is_false(self) -> None:
+        from lab_connectors.duckdb.core import _is_s3_path
+
+        assert _is_s3_path("/local/path/file.parquet") is False
+
+    def test_relative_path_is_false(self) -> None:
+        from lab_connectors.duckdb.core import _is_s3_path
+
+        assert _is_s3_path("data/file.parquet") is False
+
+    def test_https_is_false(self) -> None:
+        from lab_connectors.duckdb.core import _is_s3_path
+
+        assert _is_s3_path("https://storage.googleapis.com/bucket/file.parquet") is False
