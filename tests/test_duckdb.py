@@ -4,6 +4,7 @@
 ``duckdb`` è extra opzionale ``[duckdb]`` — se non installato,
 ``pytest.importorskip`` salta tutti i test del modulo.
 """
+
 from __future__ import annotations
 
 import unittest.mock
@@ -95,7 +96,9 @@ class TestSafeConnectErrors:
             raise RuntimeError("simulated close failure")
 
         with unittest.mock.patch.object(
-            duckdb.DuckDBPyConnection, "close", _broken_close,
+            duckdb.DuckDBPyConnection,
+            "close",
+            _broken_close,
         ):
             with safe_connect(":memory:") as con:
                 con.execute("SELECT 1")
@@ -178,9 +181,7 @@ class TestGcsConnect:
         s3 = "s3://dataciviclab-clean/catalog_inventory/catalog_inventory_latest.parquet"
         try:
             with gcs_connect(s3) as con:
-                row = con.execute(
-                    f"SELECT COUNT(*) FROM read_parquet('{s3}')"
-                ).fetchone()
+                row = con.execute(f"SELECT COUNT(*) FROM read_parquet('{s3}')").fetchone()
                 assert row is not None and row[0] > 0
         except duckdb.IOException as exc:
             if "HTTP" in str(exc) or "404" in str(exc):

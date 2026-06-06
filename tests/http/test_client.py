@@ -167,9 +167,7 @@ def test_post_verify_collision_free_fallback(monkeypatch: pytest.MonkeyPatch) ->
         return _FakeResponse(200, b"ok")
 
     monkeypatch.setattr(requests, "post", fake_post)
-    monkeypatch.setattr(
-        requests.Session, "post", lambda self, *a, **kw: fake_post(*a, **kw)
-    )
+    monkeypatch.setattr(requests.Session, "post", lambda self, *a, **kw: fake_post(*a, **kw))
 
     client = HttpClient()
     # Caller passes verify=True — does NOT collide with fallback verify=False
@@ -194,9 +192,7 @@ def _patch_session_post(monkeypatch: pytest.MonkeyPatch, fake_post) -> None:
     Session.post is a bound method that passes self first, hence the lambda wrapper.
     """
     monkeypatch.setattr(requests, "post", fake_post)
-    monkeypatch.setattr(
-        requests.Session, "post", lambda self, *a, **kw: fake_post(*a, **kw)
-    )
+    monkeypatch.setattr(requests.Session, "post", lambda self, *a, **kw: fake_post(*a, **kw))
 
 
 @pytest.mark.adapter

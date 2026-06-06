@@ -1,4 +1,5 @@
 """Minimal tests for backoff and 429 Retry-After in HttpClient."""
+
 from __future__ import annotations
 
 import random

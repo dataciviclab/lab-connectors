@@ -108,18 +108,22 @@ class TestPureFunctions:
 
     @pytest.mark.pure_unit
     def test_bindings_to_csv_single(self):
-        result = _bindings_to_csv([
-            {"pred": {"value": "http://ex.org/name"}, "cnt": {"value": "100"}},
-        ])
+        result = _bindings_to_csv(
+            [
+                {"pred": {"value": "http://ex.org/name"}, "cnt": {"value": "100"}},
+            ]
+        )
         assert b"pred,cnt" in result
         assert b"http://ex.org/name,100" in result
 
     @pytest.mark.pure_unit
     def test_bindings_to_csv_multiple_columns(self):
-        result = _bindings_to_csv([
-            {"a": {"value": "1"}, "b": {"value": "x"}},
-            {"a": {"value": "2"}, "b": {"value": "y"}},
-        ])
+        result = _bindings_to_csv(
+            [
+                {"a": {"value": "1"}, "b": {"value": "x"}},
+                {"a": {"value": "2"}, "b": {"value": "y"}},
+            ]
+        )
         lines = result.decode().splitlines()
         assert lines[0] == "a,b"
         assert lines[1] == "1,x"
@@ -201,7 +205,8 @@ class TestFetchCsvPagination:
             result = fetch_csv(
                 "https://ex.test/sparql",
                 "SELECT * WHERE { ?s ?p ?o } LIMIT 5",
-                pages=3, step=100,
+                pages=3,
+                step=100,
             )
             assert mock_page.call_count == 1
             assert result == b"col\nval"
@@ -224,7 +229,8 @@ class TestFetchCsvPagination:
             fetch_csv(
                 "https://ex.test/sparql",
                 "SELECT ?s WHERE { ?s ?p ?o }",
-                pages=2, step=10,
+                pages=2,
+                step=10,
             )
             assert len(captured) == 2
             assert "LIMIT 10" in captured[0]
@@ -249,7 +255,8 @@ class TestFetchCsvPagination:
             fetch_csv(
                 "https://ex.test/sparql",
                 "SELECT ?s WHERE { ?s ?p ?o } ORDER BY ?s",
-                pages=2, step=10,
+                pages=2,
+                step=10,
             )
             assert len(captured) == 2
             assert "LIMIT 10" in captured[0]
@@ -264,9 +271,7 @@ class TestFetchCsvPagination:
 
         def fake_page(endpoint, query, timeout):
             call[0] += 1
-            lines = "col\n" + "\n".join(
-                f"val{i}" for i in range(5)
-            )
+            lines = "col\n" + "\n".join(f"val{i}" for i in range(5))
             return lines.encode()
 
         with patch(
@@ -276,12 +281,23 @@ class TestFetchCsvPagination:
             result = fetch_csv(
                 "https://ex.test/sparql",
                 "SELECT ?s WHERE { ?s ?p ?o }",
-                pages=2, step=2,
+                pages=2,
+                step=2,
             )
             lines = result.decode().splitlines()
             assert lines[0] == "col"  # header una volta
-            assert lines[1:] == ["val0", "val1", "val2", "val3", "val4",
-                                 "val0", "val1", "val2", "val3", "val4"]
+            assert lines[1:] == [
+                "val0",
+                "val1",
+                "val2",
+                "val3",
+                "val4",
+                "val0",
+                "val1",
+                "val2",
+                "val3",
+                "val4",
+            ]
 
 
 @pytest.mark.contract

@@ -27,7 +27,9 @@ _RE_HAS_LIMIT = re.compile(r"\bLIMIT\s+\d+", re.IGNORECASE)
 
 
 def _sparql_post(
-    client: HttpClient, endpoint: str, query: str,
+    client: HttpClient,
+    endpoint: str,
+    query: str,
 ) -> list[dict[str, Any]] | None:
     """Esegue query SPARQL via POST form-encoded. Restituisce bindings o None."""
     try:
@@ -48,7 +50,9 @@ def _sparql_post(
 
 
 def _sparql_get(
-    client: HttpClient, endpoint: str, query: str,
+    client: HttpClient,
+    endpoint: str,
+    query: str,
 ) -> list[dict[str, Any]] | None:
     """Esegue query SPARQL via GET con query URL-encoded. Restituisce bindings o None."""
     url = f"{endpoint}?query={urllib.parse.quote(query)}"
@@ -107,10 +111,7 @@ def execute_sparql(
     if bindings is not None:
         return bindings
 
-    raise RuntimeError(
-        f"SPARQL query failed on {endpoint} "
-        f"(POST e GET fallback entrambi falliti)"
-    )
+    raise RuntimeError(f"SPARQL query failed on {endpoint} (POST e GET fallback entrambi falliti)")
 
 
 def fetch_csv(
@@ -151,9 +152,7 @@ def fetch_csv(
     all_csv_parts: list[bytes] = []
     for page in range(pages):
         offset = page * limit_value
-        page_query = query.replace("{limit}", str(limit_value)).replace(
-            "{offset}", str(offset)
-        )
+        page_query = query.replace("{limit}", str(limit_value)).replace("{offset}", str(offset))
         csv_bytes = _fetch_csv_page(endpoint, page_query, timeout)
 
         if page == 0:
@@ -175,7 +174,9 @@ def fetch_csv(
 
 
 def _fetch_csv_page(
-    endpoint: str, query: str, timeout: int,
+    endpoint: str,
+    query: str,
+    timeout: int,
 ) -> bytes:
     """Esegue una singola pagina SPARQL e restituisce CSV bytes.
 
@@ -214,10 +215,7 @@ def _fetch_csv_page(
     if bindings is not None:
         return _bindings_to_csv(bindings)
 
-    raise RuntimeError(
-        f"SPARQL CSV fetch failed on {endpoint} "
-        f"(POST/GET + CSV/JSON tutti falliti)"
-    )
+    raise RuntimeError(f"SPARQL CSV fetch failed on {endpoint} (POST/GET + CSV/JSON tutti falliti)")
 
 
 def _looks_like_csv(data: bytes) -> bool:
@@ -285,9 +283,15 @@ def discover_graphs(
 
     bindings = execute_sparql(endpoint, query, timeout=timeout)
 
-    blacklist = _ensure_str_list(blacklist or [
-        "localhost", "virtrdf", "owl#", "8890",
-    ])
+    blacklist = _ensure_str_list(
+        blacklist
+        or [
+            "localhost",
+            "virtrdf",
+            "owl#",
+            "8890",
+        ]
+    )
     graphs: list[str] = []
     for binding in bindings:
         g = _binding_value(binding, "g")
@@ -345,11 +349,13 @@ def _build_schema_list(bindings: list[dict]) -> list[dict]:
             cnt = int(cnt_str)
         except (ValueError, TypeError):
             cnt = 0
-        result.append({
-            "pred": pred_uri,
-            "compact_name": _compact_uri(pred_uri),
-            "count": cnt,
-        })
+        result.append(
+            {
+                "pred": pred_uri,
+                "compact_name": _compact_uri(pred_uri),
+                "count": cnt,
+            }
+        )
     return result
 
 

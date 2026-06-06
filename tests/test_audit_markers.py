@@ -148,11 +148,15 @@ def test_with_fixture(fix):
         sub = tmp_path / "http"
         sub.mkdir()
         _write_test(tmp_path, "test_root.py", "def test_root(): pass")
-        _write_test(sub, "test_http.py", """
+        _write_test(
+            sub,
+            "test_http.py",
+            """
 import pytest
 @pytest.mark.adapter
 def test_http_call(): pass
-""")
+""",
+        )
         results = collect_tests(tmp_path)
         assert len(results) == 2
         by_file = {r["file"]: r for r in results}
@@ -174,11 +178,15 @@ class TestMain:
 
     @pytest.mark.pure_unit
     def test_ok_all_marked(self, tmp_path: Path) -> None:
-        _write_test(tmp_path, "test_ok.py", """
+        _write_test(
+            tmp_path,
+            "test_ok.py",
+            """
 import pytest
 @pytest.mark.pure_unit
 def test_ok(): pass
-""")
+""",
+        )
         code = main([str(tmp_path)])
         assert code == 0
 
@@ -190,11 +198,15 @@ def test_ok(): pass
 
     @pytest.mark.pure_unit
     def test_diff_ok_when_marked(self, tmp_path: Path) -> None:
-        _write_test(tmp_path, "test_good.py", """
+        _write_test(
+            tmp_path,
+            "test_good.py",
+            """
 import pytest
 @pytest.mark.contract
 def test_good(): pass
-""")
+""",
+        )
         code = main([str(tmp_path), "--diff"])
         assert code == 0
 
@@ -205,6 +217,7 @@ def test_good(): pass
         assert code == 0
         captured = capsys.readouterr()
         import json
+
         data = json.loads(captured.out)
         assert data["total"] == 1
         assert data["unmarked"] == 1
@@ -217,11 +230,15 @@ def test_good(): pass
     @pytest.mark.pure_unit
     def test_file_filter_via_cli(self, tmp_path: Path) -> None:
         _write_test(tmp_path, "test_a.py", "def test_a(): pass")
-        _write_test(tmp_path, "test_b.py", """
+        _write_test(
+            tmp_path,
+            "test_b.py",
+            """
 import pytest
 @pytest.mark.smoke
 def test_b(): pass
-""")
+""",
+        )
         code = main([str(tmp_path), "--diff", "--files", "test_a.py"])
         assert code == 1  # test_a.py is unmarked
         code = main([str(tmp_path), "--diff", "--files", "test_b.py"])

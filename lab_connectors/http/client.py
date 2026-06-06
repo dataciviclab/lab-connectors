@@ -10,6 +10,7 @@ It wraps requests with:
 - HEAD, GET and POST methods
 - HttpResult return type (no exceptions raised on HTTP errors)
 """
+
 from __future__ import annotations
 
 import datetime
@@ -135,7 +136,9 @@ class HttpClient:
                 primary_exc = exc
                 logger.warning(
                     "SSL error on %s %s (attempt %d) — fallback",
-                    method_name, url, attempt + 1,
+                    method_name,
+                    url,
+                    attempt + 1,
                 )
                 urllib3.disable_warnings(category=InsecureRequestWarning)
                 return ssl_fallback_fn(url, primary_exc, kwargs)
@@ -208,8 +211,7 @@ class HttpClient:
     ) -> HttpResult:
         """SSL fallback for HEAD — strips allow_redirects to avoid collision."""
         fallback_kwargs = {
-            k: v for k, v in kwargs.items()
-            if k not in ("headers", "allow_redirects")
+            k: v for k, v in kwargs.items() if k not in ("headers", "allow_redirects")
         }
         try:
             response = self._session.head(
@@ -224,9 +226,7 @@ class HttpClient:
             logger.warning("Fallback HEAD also failed for %s: %s", url, fallback_exc)
             return HttpResult(
                 response=None,
-                err=HttpFallbackError(
-                    primary_error=primary_exc, fallback_error=fallback_exc
-                ),
+                err=HttpFallbackError(primary_error=primary_exc, fallback_error=fallback_exc),
                 ssl_fallback_used=False,
             )
         except Exception as exc:
@@ -280,9 +280,7 @@ class HttpClient:
             logger.warning("Fallback GET also failed for %s: %s", url, fallback_exc)
             return HttpResult(
                 response=None,
-                err=HttpFallbackError(
-                    primary_error=primary_exc, fallback_error=fallback_exc
-                ),
+                err=HttpFallbackError(primary_error=primary_exc, fallback_error=fallback_exc),
                 ssl_fallback_used=False,
             )
         except Exception as exc:
@@ -352,14 +350,10 @@ class HttpClient:
             )
             return HttpResult(response=response, err=None, ssl_fallback_used=True)
         except requests.exceptions.RequestException as fallback_exc:
-            logger.warning(
-                "Fallback POST also failed for %s: %s", url, fallback_exc
-            )
+            logger.warning("Fallback POST also failed for %s: %s", url, fallback_exc)
             return HttpResult(
                 response=None,
-                err=HttpFallbackError(
-                    primary_error=primary_exc, fallback_error=fallback_exc
-                ),
+                err=HttpFallbackError(primary_error=primary_exc, fallback_error=fallback_exc),
                 ssl_fallback_used=False,
             )
         except Exception as exc:

@@ -1,4 +1,5 @@
 """Tests per lab_connectors.mcp.logging."""
+
 from __future__ import annotations
 
 import logging
@@ -32,6 +33,7 @@ class TestMcpLogger:
 
     def test_timed_logs_duration(self, caplog: pytest.LogCaptureFixture) -> None:
         import time
+
         caplog.set_level(logging.INFO)
         logger = get_mcp_logger("test-server")
         start = time.monotonic()

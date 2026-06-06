@@ -1,4 +1,5 @@
 """Tests for lab_connectors.http.types."""
+
 from __future__ import annotations
 
 import pytest

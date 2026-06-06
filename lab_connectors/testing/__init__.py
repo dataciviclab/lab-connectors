@@ -14,6 +14,7 @@ Usage::
     result = fake.get("https://example.com/data.csv")
     assert result.is_ok
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -129,8 +130,7 @@ class FakeHttpClient:
         entry = self.responses.get(url)
         if entry is None:
             raise KeyError(
-                f"No response registered for {url!r}. "
-                f"Registered URLs: {list(self.responses)}"
+                f"No response registered for {url!r}. Registered URLs: {list(self.responses)}"
             )
         if callable(entry):
             return entry(url, **kwargs)
@@ -246,8 +246,7 @@ class _FakeHTTPError(requests.HTTPError):
     accesses ``e.response`` will get the provided response object.
     """
 
-    def __init__(self, status_code: int, text: str = "",
-                 response: Any = None):
+    def __init__(self, status_code: int, text: str = "", response: Any = None):
         """Initialize the HTTP error.
 
         Args:
@@ -257,5 +256,4 @@ class _FakeHTTPError(requests.HTTPError):
 
         """
         self.status_code = status_code
-        super().__init__(f"HTTP {status_code}: {text[:50]}",
-                         response=response)
+        super().__init__(f"HTTP {status_code}: {text[:50]}", response=response)

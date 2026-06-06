@@ -62,8 +62,7 @@ def create_mcp_server(
     """
     if FastMCP is None:
         raise RuntimeError(
-            "Il pacchetto 'mcp' non è installato. "
-            "Installalo con: pip install lab-connectors[mcp]"
+            "Il pacchetto 'mcp' non è installato. Installalo con: pip install lab-connectors[mcp]"
         )
 
     # Attiva logging strutturato
@@ -103,9 +102,7 @@ def guard(fn: Fn, *args: Any, **kwargs: Any) -> dict[str, Any]:
 DEFAULT_SLOW_MS = 5000
 
 
-def _log_ok(
-    logger: Any, tool_name: str, elapsed: int, slow_ms: int
-) -> None:
+def _log_ok(logger: Any, tool_name: str, elapsed: int, slow_ms: int) -> None:
     """Logga esito OK, WARNING se oltre soglia."""
     if elapsed > slow_ms:
         logger.warning(

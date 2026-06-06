@@ -1,4 +1,5 @@
 """Tests per lab_connectors.mcp.errors."""
+
 from __future__ import annotations
 
 import pytest

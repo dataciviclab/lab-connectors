@@ -44,9 +44,7 @@ class McpLogger:
         """Logga un messaggio di debug."""
         self._logger.debug(self._format(tool, msg, extra))
 
-    def timed(
-        self, tool: str, msg: str, start: float, **extra: Any
-    ) -> None:
+    def timed(self, tool: str, msg: str, start: float, **extra: Any) -> None:
         """Log con durata calcolata da un timestamp start."""
         duration_ms = round((time.monotonic() - start) * 1000)
         self.info(tool, msg, duration_ms=duration_ms, **extra)

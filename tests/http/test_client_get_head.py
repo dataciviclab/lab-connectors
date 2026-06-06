@@ -3,6 +3,7 @@
 Tests mock requests.get / requests.head (primary) and
 requests.Session.get / requests.Session.head (SSL fallback).
 """
+
 from __future__ import annotations
 
 import time
@@ -25,17 +26,13 @@ pytestmark = pytest.mark.adapter
 def _patch_both_get(monkeypatch, fake_get) -> None:
     """Patch requests.get (primary) and Session.get (SSL fallback)."""
     monkeypatch.setattr(requests, "get", fake_get)
-    monkeypatch.setattr(
-        requests.Session, "get", lambda self, *a, **kw: fake_get(*a, **kw)
-    )
+    monkeypatch.setattr(requests.Session, "get", lambda self, *a, **kw: fake_get(*a, **kw))
 
 
 def _patch_both_head(monkeypatch, fake_head) -> None:
     """Patch requests.head (primary) and Session.head (SSL fallback)."""
     monkeypatch.setattr(requests, "head", fake_head)
-    monkeypatch.setattr(
-        requests.Session, "head", lambda self, *a, **kw: fake_head(*a, **kw)
-    )
+    monkeypatch.setattr(requests.Session, "head", lambda self, *a, **kw: fake_head(*a, **kw))
 
 
 # ===========================================================================
