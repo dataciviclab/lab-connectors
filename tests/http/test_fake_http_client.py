@@ -6,6 +6,7 @@ Protected contract:
 - Callable response resolver for dynamic responses
 - Request log accessible via ``.requests``
 """
+
 from __future__ import annotations
 
 import pytest
@@ -25,7 +26,8 @@ class TestRequestMatching:
         fake = FakeHttpClient()
         url = "https://example.test/resource"
         fake.responses[url] = HttpResult(
-            response=fake_response(200, text="ok"), err=None,
+            response=fake_response(200, text="ok"),
+            err=None,
         )
         result = getattr(fake, method)(url)
         assert result.is_ok
@@ -36,7 +38,8 @@ class TestRequestMatching:
         """HttpResult con err → result.is_error."""
         fake = FakeHttpClient()
         fake.responses["https://example.test/fail"] = HttpResult(
-            response=None, err=ConnectionError("refused"),
+            response=None,
+            err=ConnectionError("refused"),
         )
         result = fake.get("https://example.test/fail")
         assert result.is_error
@@ -46,7 +49,9 @@ class TestRequestMatching:
         """ssl_fallback_used viene propagato attraverso il fake."""
         fake = FakeHttpClient()
         fake.responses["https://example.test/ssl"] = HttpResult(
-            response=fake_response(200), err=None, ssl_fallback_used=True,
+            response=fake_response(200),
+            err=None,
+            ssl_fallback_used=True,
         )
         result = fake.get("https://example.test/ssl")
         assert result.ssl_fallback_used is True
@@ -55,7 +60,8 @@ class TestRequestMatching:
         """URL non registrato → KeyError con messaggio esplicativo."""
         fake = FakeHttpClient()
         fake.responses["https://example.test/existing"] = HttpResult(
-            response=fake_response(200), err=None,
+            response=fake_response(200),
+            err=None,
         )
         with pytest.raises(KeyError, match="No response registered"):
             fake.get("https://example.test/missing")
@@ -105,6 +111,7 @@ class TestFakeResponseFactory:
     def test_raise_for_status_on_4xx(self):
         """raise_for_status su 403 solleva requests.HTTPError con response accessibile."""
         import requests
+
         resp = fake_response(403, text="forbidden")
         with pytest.raises(requests.HTTPError) as exc_info:
             resp.raise_for_status()

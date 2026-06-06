@@ -48,9 +48,7 @@ class GcsListObjectsTest(unittest.TestCase):
 
     def test_list_empty_prefix(self) -> None:
         """List con prefix inesistente ritorna lista vuota."""
-        results = list_objects(
-            "dataciviclab-clean", prefix="__nonexistent__", limit=5, auth=False
-        )
+        results = list_objects("dataciviclab-clean", prefix="__nonexistent__", limit=5, auth=False)
         self.assertEqual(results, [])
 
     @patch("lab_connectors.gcs.client.urlopen")
@@ -84,6 +82,7 @@ class GcsObjectExistsTest(unittest.TestCase):
     @patch("lab_connectors.gcs.client.urlopen")
     def test_exists_returns_true(self, mock_urlopen) -> None:
         from io import BytesIO
+
         mock = BytesIO(b"")
         mock.status = 200
         mock_urlopen.return_value = mock
@@ -93,9 +92,8 @@ class GcsObjectExistsTest(unittest.TestCase):
     @patch("lab_connectors.gcs.client.urlopen")
     def test_not_found_returns_false(self, mock_urlopen) -> None:
         from urllib.error import HTTPError
-        mock_urlopen.side_effect = HTTPError(
-            "http://example.com", 404, "Not Found", {}, None
-        )
+
+        mock_urlopen.side_effect = HTTPError("http://example.com", 404, "Not Found", {}, None)
 
         self.assertFalse(object_exists("test-bucket", "missing/file.parquet"))
 
@@ -106,6 +104,7 @@ class GcsCheckPublicTest(unittest.TestCase):
     @patch("lab_connectors.gcs.client.urlopen")
     def test_accessible(self, mock_urlopen) -> None:
         from io import BytesIO
+
         mock = BytesIO(b"")
         mock.status = 200
         mock.headers = {"Content-Type": "application/x-parquet"}
@@ -118,9 +117,8 @@ class GcsCheckPublicTest(unittest.TestCase):
     @patch("lab_connectors.gcs.client.urlopen")
     def test_not_found(self, mock_urlopen) -> None:
         from urllib.error import HTTPError
-        mock_urlopen.side_effect = HTTPError(
-            "http://example.com", 404, "Not Found", {}, None
-        )
+
+        mock_urlopen.side_effect = HTTPError("http://example.com", 404, "Not Found", {}, None)
 
         result = check_public("https://storage.googleapis.com/test/missing.parquet")
         self.assertFalse(result["accessible"])
@@ -162,6 +160,7 @@ class GcsListSdkPathTest(unittest.TestCase):
     def _make_mock_blob(self, name: str, size: int = 1024) -> object:
         """Crea un oggetto mock che simula un blob GCS."""
         from datetime import datetime
+
         blob = type("MockBlob", (), {})()
         blob.name = name
         blob.size = size
@@ -211,6 +210,7 @@ class GcsListSdkPathTest(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["name"], "sdk/file.parquet")
 
+
 class GcsHttpPaginationTest(unittest.TestCase):
     """Test per la paginazione HTTP fallback (auth=None senza SDK)."""
 
@@ -224,9 +224,9 @@ class GcsHttpPaginationTest(unittest.TestCase):
         mock_get_client.return_value = None
 
         def fake_open(url, **kw):
-            data = {"items": [
-                {"name": "a.parquet", "size": "100", "updated": "2026-01-01T00:00:00Z"}
-            ]}
+            data = {
+                "items": [{"name": "a.parquet", "size": "100", "updated": "2026-01-01T00:00:00Z"}]
+            }
             result = BytesIO(json.dumps(data).encode())
             result.status = 200
             return result
@@ -248,16 +248,22 @@ class GcsHttpPaginationTest(unittest.TestCase):
         mock_get_client.return_value = None
 
         page = 0
+
         def fake_open(url, **kw):
             nonlocal page
             page += 1
-            items = [{"name": f"p1_{i}.parquet", "size": "10",
-                       "updated": "2026-01-01T00:00:00Z"} for i in range(3)]
+            items = [
+                {"name": f"p1_{i}.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
+                for i in range(3)
+            ]
             if page == 1:
                 data = {"items": items, "nextPageToken": "token-p2"}
             else:
-                data = {"items": [{"name": "p2_0.parquet", "size": "10",
-                                    "updated": "2026-01-01T00:00:00Z"}]}
+                data = {
+                    "items": [
+                        {"name": "p2_0.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
+                    ]
+                }
             result = BytesIO(json.dumps(data).encode())
             result.status = 200
             return result
@@ -279,11 +285,14 @@ class GcsHttpPaginationTest(unittest.TestCase):
         mock_get_client.return_value = None
 
         page = 0
+
         def fake_open(url, **kw):
             nonlocal page
             page += 1
-            items = [{"name": f"p1_{i}.parquet", "size": "10",
-                       "updated": "2026-01-01T00:00:00Z"} for i in range(3)]
+            items = [
+                {"name": f"p1_{i}.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
+                for i in range(3)
+            ]
             data = {"items": items, "nextPageToken": "token-p2"}
             result = BytesIO(json.dumps(data).encode())
             result.status = 200

@@ -74,8 +74,7 @@ def resolve(pattern_key: str, **kwargs: Any) -> str:
         return patterns[pattern_key].format(**kwargs)
     except KeyError as e:
         raise KeyError(
-            f"Parametro mancante per {pattern_key!r}: {e}. "
-            f"Template: {patterns[pattern_key]!r}"
+            f"Parametro mancante per {pattern_key!r}: {e}. Template: {patterns[pattern_key]!r}"
         ) from None
 
 

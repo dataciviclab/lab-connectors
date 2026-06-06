@@ -74,10 +74,7 @@ def _gcs_http_list(
     if page_token:
         params["pageToken"] = page_token
 
-    url = (
-        f"https://storage.googleapis.com/storage/v1/b/{quote(bucket)}/o?"
-        f"{urlencode(params)}"
-    )
+    url = f"https://storage.googleapis.com/storage/v1/b/{quote(bucket)}/o?{urlencode(params)}"
     with urlopen(url, timeout=30) as resp:
         payload = json.loads(resp.read().decode("utf-8"))
 
@@ -130,8 +127,7 @@ def list_objects(
         client = _get_storage_client()
         if client is None:
             raise RuntimeError(
-                "auth=True ma google.cloud.storage non disponibile "
-                "o credenziali mancanti."
+                "auth=True ma google.cloud.storage non disponibile o credenziali mancanti."
             )
         from google.cloud.storage.retry import DEFAULT_RETRY
 
@@ -196,11 +192,13 @@ def list_objects(
         page_limit = min(remaining, 1000) if remaining is not None else None
         items, next_token = _gcs_http_list(bucket, prefix, page_limit, token)
         for item in items:
-            all_items.append({
-                "name": item["name"],
-                "size": int(item.get("size", 0)),
-                "updated": item.get("updated"),
-            })
+            all_items.append(
+                {
+                    "name": item["name"],
+                    "size": int(item.get("size", 0)),
+                    "updated": item.get("updated"),
+                }
+            )
             if remaining is not None:
                 remaining -= 1
                 if remaining <= 0:

@@ -11,6 +11,7 @@ Cattura cambiamenti upstream che i test mock-based non vedono:
 - Cambiamenti al contratto dell'endpoint
 - Downtime dell'infrastruttura GCS/catalogo
 """
+
 from __future__ import annotations
 
 import os
@@ -20,9 +21,7 @@ import pytest
 from lab_connectors.http import HttpClient
 from lab_connectors.http.types import HttpResult
 
-MANIFEST_URL = (
-    "https://storage.googleapis.com/dataciviclab-clean/catalog/manifest.json"
-)
+MANIFEST_URL = "https://storage.googleapis.com/dataciviclab-clean/catalog/manifest.json"
 
 
 @pytest.mark.smoke
@@ -53,17 +52,13 @@ def _require_smoke_env() -> None:
     Previene esecuzione accidentale in PR CI.
     """
     if not os.environ.get("SMOKE_TESTS"):
-        pytest.skip(
-            "SMOKE_TESTS not set — smoke test skipped. "
-            "Set SMOKE_TESTS=1 to enable."
-        )
+        pytest.skip("SMOKE_TESTS not set — smoke test skipped. Set SMOKE_TESTS=1 to enable.")
 
 
 def _assert_result_ok(result: HttpResult) -> None:
     """Assert the result is usable (network + HTTP success)."""
     assert result.is_ok, (
-        f"HTTP request failed: {result.err}. "
-        f"SSL fallback: {result.ssl_fallback_used}"
+        f"HTTP request failed: {result.err}. SSL fallback: {result.ssl_fallback_used}"
     )
     assert result.response is not None
     assert result.response.status_code == 200

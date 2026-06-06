@@ -10,12 +10,15 @@ It wraps requests with:
 - HEAD, GET and POST methods
 - HttpResult return type (no exceptions raised on HTTP errors)
 """
+
 from __future__ import annotations
 
 import datetime
 import logging
 import random
+import threading
 import time
+import urllib.parse
 from collections.abc import Callable
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -24,7 +27,7 @@ import requests
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 
-from lab_connectors.http.types import HttpFallbackError, HttpResult
+from lab_connectors.http.types import CircuitOpenError, HttpFallbackError, HttpResult
 
 logger = logging.getLogger("lab_connectors.http")
 
@@ -54,6 +57,7 @@ class HttpClient:
         retry_backoff: float = 1.0,
         user_agent: str | None = None,
         retry_jitter: float = 0.0,
+        circuit_threshold: int = 0,
     ):
         """Initialize HttpClient.
 
@@ -68,6 +72,11 @@ class HttpClient:
             retry_jitter: Randomisation factor for backoff delay (0.0 = no
                 jitter). Each sleep is multiplied by ``uniform(1-jitter,
                 1+jitter)``. Es. 0.1 = ±10% variation. Disabled by default.
+            circuit_threshold: Number of consecutive failures on the same
+                host before the circuit breaker opens. 0 = disabled.
+                When open, further requests to that host return
+                ``CircuitOpenError`` immediately without a network call.
+                The circuit resets on the first success.
 
         """
         self.timeout = timeout
@@ -75,6 +84,11 @@ class HttpClient:
         self.retry_backoff = retry_backoff
         self.retry_jitter = retry_jitter
         self.user_agent = user_agent or self.DEFAULT_USER_AGENT
+
+        # Circuit breaker (per-host)
+        self._circuit_threshold = circuit_threshold
+        self._cb_consecutive: dict[str, int] = {}
+        self._cb_lock = threading.Lock()
 
         # Shared session for SSL fallback (connection pooling)
         self._session = requests.Session()
@@ -91,6 +105,57 @@ class HttpClient:
     def __exit__(self, *args: Any) -> None:
         """Close the session when exiting the context manager."""
         self.close()
+
+    # ------------------------------------------------------------------
+    # Circuit breaker (per-host)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _netloc(url: str) -> str | None:
+        """Extract hostname from URL for circuit breaker key."""
+        try:
+            parsed = urllib.parse.urlparse(url)
+            host = (parsed.netloc or "").lower()
+            return host or None
+        except Exception:
+            return None
+
+    def _circuit_should_block(self, url: str) -> bool:
+        """Check if the circuit is open for this host.
+
+        Returns True if the request should be skipped.
+        """
+        if self._circuit_threshold <= 0:
+            return False
+        host = self._netloc(url)
+        if not host:
+            return False
+        with self._cb_lock:
+            return self._cb_consecutive.get(host, 0) >= self._circuit_threshold
+
+    def _circuit_after_result(self, url: str, result: HttpResult) -> None:
+        """Update circuit state after a request completes."""
+        if self._circuit_threshold <= 0:
+            return
+        host = self._netloc(url)
+        if not host:
+            return
+        # Consider an error as: err is set, or HTTP 5xx
+        failed = result.err is not None or (
+            result.response is not None and result.response.status_code >= 500
+        )
+        with self._cb_lock:
+            if failed:
+                n = self._cb_consecutive.get(host, 0) + 1
+                self._cb_consecutive[host] = n
+                if n == self._circuit_threshold:
+                    logger.warning(
+                        "Circuit breaker: host %s aperto dopo %d errori consecutivi",
+                        host,
+                        n,
+                    )
+            else:
+                self._cb_consecutive[host] = 0
 
     # ------------------------------------------------------------------
     # Generic retry loop
@@ -135,7 +200,9 @@ class HttpClient:
                 primary_exc = exc
                 logger.warning(
                     "SSL error on %s %s (attempt %d) — fallback",
-                    method_name, url, attempt + 1,
+                    method_name,
+                    url,
+                    attempt + 1,
                 )
                 urllib3.disable_warnings(category=InsecureRequestWarning)
                 return ssl_fallback_fn(url, primary_exc, kwargs)
@@ -186,12 +253,22 @@ class HttpClient:
             HttpResult with response or err.
 
         """
+        # Circuit breaker check
+        if self._circuit_should_block(url):
+            host = self._netloc(url)
+            logger.warning("HEAD %s — skipped (circuit open for %s)", url, host)
+            return HttpResult(
+                response=None,
+                err=CircuitOpenError(f"Circuit open for host {host}"),
+                ssl_fallback_used=None,
+            )
+
         headers = kwargs.pop("headers", None) or {}
         headers["User-Agent"] = self.user_agent
         kwargs["headers"] = headers
         kwargs.setdefault("allow_redirects", True)
 
-        return self._execute(
+        result = self._execute(
             "HEAD",
             url,
             lambda u, **kw: requests.head(u, **kw),
@@ -199,6 +276,8 @@ class HttpClient:
             max(1, self.max_retries),
             **kwargs,
         )
+        self._circuit_after_result(url, result)
+        return result
 
     def _head_ssl_fallback(
         self,
@@ -208,8 +287,7 @@ class HttpClient:
     ) -> HttpResult:
         """SSL fallback for HEAD — strips allow_redirects to avoid collision."""
         fallback_kwargs = {
-            k: v for k, v in kwargs.items()
-            if k not in ("headers", "allow_redirects")
+            k: v for k, v in kwargs.items() if k not in ("headers", "allow_redirects")
         }
         try:
             response = self._session.head(
@@ -224,9 +302,7 @@ class HttpClient:
             logger.warning("Fallback HEAD also failed for %s: %s", url, fallback_exc)
             return HttpResult(
                 response=None,
-                err=HttpFallbackError(
-                    primary_error=primary_exc, fallback_error=fallback_exc
-                ),
+                err=HttpFallbackError(primary_error=primary_exc, fallback_error=fallback_exc),
                 ssl_fallback_used=False,
             )
         except Exception as exc:
@@ -247,11 +323,21 @@ class HttpClient:
             HttpResult with response or err.
 
         """
+        # Circuit breaker check
+        if self._circuit_should_block(url):
+            host = self._netloc(url)
+            logger.warning("GET %s — skipped (circuit open for %s)", url, host)
+            return HttpResult(
+                response=None,
+                err=CircuitOpenError(f"Circuit open for host {host}"),
+                ssl_fallback_used=None,
+            )
+
         headers = kwargs.pop("headers", None) or {}
         headers["User-Agent"] = self.user_agent
         kwargs["headers"] = headers
 
-        return self._execute(
+        result = self._execute(
             "GET",
             url,
             lambda u, **kw: requests.get(u, **kw),
@@ -259,6 +345,8 @@ class HttpClient:
             max(1, self.max_retries),
             **kwargs,
         )
+        self._circuit_after_result(url, result)
+        return result
 
     def _get_ssl_fallback(
         self,
@@ -280,9 +368,7 @@ class HttpClient:
             logger.warning("Fallback GET also failed for %s: %s", url, fallback_exc)
             return HttpResult(
                 response=None,
-                err=HttpFallbackError(
-                    primary_error=primary_exc, fallback_error=fallback_exc
-                ),
+                err=HttpFallbackError(primary_error=primary_exc, fallback_error=fallback_exc),
                 ssl_fallback_used=False,
             )
         except Exception as exc:
@@ -318,11 +404,21 @@ class HttpClient:
             HttpResult with response or err.
 
         """
+        # Circuit breaker check
+        if self._circuit_should_block(url):
+            host = self._netloc(url)
+            logger.warning("POST %s — skipped (circuit open for %s)", url, host)
+            return HttpResult(
+                response=None,
+                err=CircuitOpenError(f"Circuit open for host {host}"),
+                ssl_fallback_used=None,
+            )
+
         headers = kwargs.pop("headers", None) or {}
         headers["User-Agent"] = self.user_agent
         kwargs["headers"] = headers
 
-        return self._execute(
+        result = self._execute(
             "POST",
             url,
             lambda u, **kw: requests.post(u, data=data, json=json, **kw),
@@ -330,6 +426,8 @@ class HttpClient:
             max(1, retries),
             **kwargs,
         )
+        self._circuit_after_result(url, result)
+        return result
 
     def _post_ssl_fallback(
         self,
@@ -352,14 +450,10 @@ class HttpClient:
             )
             return HttpResult(response=response, err=None, ssl_fallback_used=True)
         except requests.exceptions.RequestException as fallback_exc:
-            logger.warning(
-                "Fallback POST also failed for %s: %s", url, fallback_exc
-            )
+            logger.warning("Fallback POST also failed for %s: %s", url, fallback_exc)
             return HttpResult(
                 response=None,
-                err=HttpFallbackError(
-                    primary_error=primary_exc, fallback_error=fallback_exc
-                ),
+                err=HttpFallbackError(primary_error=primary_exc, fallback_error=fallback_exc),
                 ssl_fallback_used=False,
             )
         except Exception as exc:

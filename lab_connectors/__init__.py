@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from lab_connectors.http import HttpClient, HttpFallbackError, HttpResult
+from lab_connectors.http import (
+    CircuitOpenError,
+    GenericPool,
+    HttpClient,
+    HttpFallbackError,
+    HttpResult,
+)
 from lab_connectors.mcp import (
     CacheStats,
     ErrorCode,
@@ -14,6 +20,8 @@ from lab_connectors.mcp import (
 )
 
 __all__ = [
+    "CircuitOpenError",
+    "GenericPool",
     "HttpClient",
     "HttpFallbackError",
     "HttpResult",

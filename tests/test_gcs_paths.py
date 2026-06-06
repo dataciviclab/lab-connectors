@@ -40,10 +40,7 @@ class TestPathsContract(unittest.TestCase):
     def setUp(self) -> None:
         self.contract = load_contract()
         self.contract_path = (
-            Path(__file__).resolve().parents[1]
-            / "lab_connectors"
-            / "gcs"
-            / "paths.json"
+            Path(__file__).resolve().parents[1] / "lab_connectors" / "gcs" / "paths.json"
         )
 
     # ── load_contract ────────────────────────────────────────────────────────
@@ -263,9 +260,7 @@ class TestPathsContract(unittest.TestCase):
 
     def test_gs_url_mart_parquet(self) -> None:
         url = gs_url("mart", "mart_parquet", slug="demo", year=2024, table="costi")
-        self.assertEqual(
-            url, "gs://dataciviclab-mart/demo/2024/costi.parquet"
-        )
+        self.assertEqual(url, "gs://dataciviclab-mart/demo/2024/costi.parquet")
 
     def test_https_url_mart_parquet(self) -> None:
         url = https_url("mart", "mart_parquet", slug="demo", year=2024, table="costi")
@@ -296,6 +291,7 @@ class TestPathsContract(unittest.TestCase):
         from lab_connectors.gcs import (
             resolve as RSLV,
         )
+
         self.assertEqual(CB, "dataciviclab-clean")
         self.assertEqual(RSLV("catalog_manifest"), "catalog/manifest.json")
 
@@ -353,10 +349,10 @@ class TestGlobToRegex(unittest.TestCase):
 
     def test_double_star_recursive(self) -> None:
         rx = glob_to_regex("foo/**/bar.parquet")
-        self.assertIsNotNone(re.match(rx, "foo/bar.parquet"))         # zero depth
-        self.assertIsNotNone(re.match(rx, "foo/x/bar.parquet"))       # one level
-        self.assertIsNotNone(re.match(rx, "foo/x/y/bar.parquet"))     # two levels
-        self.assertIsNone(re.match(rx, "foo/abcbar.parquet"))         # no dir boundary
+        self.assertIsNotNone(re.match(rx, "foo/bar.parquet"))  # zero depth
+        self.assertIsNotNone(re.match(rx, "foo/x/bar.parquet"))  # one level
+        self.assertIsNotNone(re.match(rx, "foo/x/y/bar.parquet"))  # two levels
+        self.assertIsNone(re.match(rx, "foo/abcbar.parquet"))  # no dir boundary
 
     def test_double_star_alone(self) -> None:
         rx = glob_to_regex("foo/**")

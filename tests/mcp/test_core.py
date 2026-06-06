@@ -1,4 +1,5 @@
 """Tests per lab_connectors.mcp.core."""
+
 from __future__ import annotations
 
 import time
@@ -33,7 +34,6 @@ class TestCreateMcpServer:
 
         tools = {t if isinstance(t, str) else t.name for t in mcp._tool_manager._tools}
         assert "my_tool" in tools
-
 
 
 class TestGuard:
@@ -105,6 +105,7 @@ class TestGuardTimed:
 
     def test_slow_does_not_block_result(self) -> None:
         """Anche se la chiamata supera slow_ms, il risultato torna corretto."""
+
         def _slow() -> dict:
             time.sleep(0.015)  # 15ms
             return {"ok": "slow_but_ok"}

@@ -1,4 +1,5 @@
 """Shared HTTP client types for DataCivicLab."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,6 +24,16 @@ class HttpFallbackError(Exception):
             f"primary failed with {self.primary_error.__class__.__name__}; "
             f"fallback failed with {self.fallback_error.__class__.__name__}"
         )
+
+
+class CircuitOpenError(Exception):
+    """Request skipped because the circuit breaker is open for that host.
+
+    The circuit is per-host: after ``circuit_threshold`` consecutive errors
+    (timeout, connection error, HTTP 5xx) on the same host, subsequent
+    requests to that host return this error immediately without making a
+    network call.
+    """
 
 
 @dataclass
