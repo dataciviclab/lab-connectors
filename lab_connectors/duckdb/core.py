@@ -4,10 +4,12 @@ Elimina il pattern ``duckdb.connect()`` + ``try/finally`` + ``con.close()``
 duplicato in 3+ repo del Lab.
 
 Supporta estensioni (es. ``httpfs`` per GCS) e configurazione DuckDB.
+``safe_connect`` fa ``INSTALL`` + ``LOAD`` per ogni estensione,
+quindi funziona anche su runner CI pulito.
 
 Uso::
 
-    from lab_connectors.duckdb import safe_connect
+    from lab_connectors.duckdb import safe_connect, GCS_S3_CONFIG
 
     with safe_connect() as con:
         result = con.execute("SELECT 1").fetchall()
@@ -15,7 +17,7 @@ Uso::
     with safe_connect(extensions=["httpfs"]) as con:
         con.execute("SELECT * FROM read_parquet('s3://bucket/file.parquet')")
 
-    with safe_connect(config={"s3_region": "auto"}) as con:
+    with safe_connect(config=GCS_S3_CONFIG) as con:
         con.execute("SELECT * FROM read_parquet('s3://bucket/file.parquet')")
 """
 
@@ -26,6 +28,19 @@ from contextlib import contextmanager
 from typing import Any
 
 
+# ── Configurazione DuckDB per bucket GCS pubblici via S3-compatible API ───────
+# Serve perche' DuckDB httpfs legge GCS tramite API S3, con endpoint
+# storage.googleapis.com. Senza questa config, DuckDB prova AWS S3 e fallisce 404.
+
+GCS_S3_CONFIG: dict[str, str] = {
+    "s3_endpoint": "storage.googleapis.com",
+    "s3_region": "auto",
+    "s3_access_key_id": "",
+    "s3_secret_access_key": "",
+    "s3_use_ssl": "true",
+}
+
+
 @contextmanager
 def safe_connect(
     database: str = ":memory:",
@@ -34,10 +49,13 @@ def safe_connect(
 ) -> Generator[Any, None, None]:
     """Context manager per connessioni DuckDB.
 
+    ``INSTALL`` + ``LOAD`` per ogni estensione specificata.
+    ``INSTALL`` è idempotente — sicuro su runner con estensione già presente.
+
     Args:
         database: Path al database o ``":memory:"`` (default).
-        extensions: Lista di estensioni DuckDB da caricare (es. ``["httpfs"]``).
-        config: Dict di configurazione DuckDB (es. ``{"s3_region": "auto"}``).
+        extensions: Lista di estensioni DuckDB da installare e caricare (es. ``["httpfs"]``).
+        config: Dict di configurazione DuckDB (es. ``GCS_S3_CONFIG``).
 
     Yields:
         duckdb.DuckDBPyConnection — connessione aperta.
@@ -52,6 +70,7 @@ def safe_connect(
     try:
         if extensions:
             for ext in extensions:
+                con.execute(f"INSTALL {ext}")
                 con.execute(f"LOAD {ext}")
         yield con
     finally:
