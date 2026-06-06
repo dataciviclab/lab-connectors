@@ -91,11 +91,108 @@ def https_url(bucket_key: str, pattern_key: str, **kwargs: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# GCS URL parsing
+# ---------------------------------------------------------------------------
+
+
+def parse_gs_url(url: str) -> tuple[str, str]:
+    """Analizza un URL ``gs://`` in (bucket, key).
+
+    Args:
+        url: URL del tipo ``gs://dataciviclab-clean/demo/2024/file.parquet``.
+
+    Returns:
+        Tupla ``(bucket, key)`` — es. ``("dataciviclab-clean", "demo/2024/file.parquet")``.
+
+    Raises:
+        ValueError: se l'URL non inizia con ``gs://``.
+
+
+    Example::
+
+        >>> parse_gs_url("gs://bucket/path/to/file.parquet")
+        ("bucket", "path/to/file.parquet")
+
+    """
+    if not url.startswith("gs://"):
+        raise ValueError(f"URL deve iniziare con gs://, ricevuto: {url}")
+    rest = url[5:]  # rimuovi 'gs://'
+    bucket, sep, key = rest.partition("/")
+    if not sep:
+        raise ValueError(f"URL gs:// senza path: {url}")
+    return (bucket, key)
+
+
+# ---------------------------------------------------------------------------
 # Bucket names (costanti — corrispondono a paths.json)
 # ---------------------------------------------------------------------------
 
 CLEAN_BUCKET: str = get_bucket("clean")
 MART_BUCKET: str = get_bucket("mart")
+
+# ---------------------------------------------------------------------------
+# Glob pattern → regex
+# ---------------------------------------------------------------------------
+
+
+def glob_to_regex(pattern: str) -> str:
+    r"""Convert a glob pattern to an anchored regex (``^...$``).
+
+    Supported wildcards:
+
+    * ``*`` — matches any chars except ``/`` (single directory component).
+    * ``**`` — matches any chars including ``/``.
+    * ``**/`` — matches zero or more directory levels (``a/**/b`` matches
+      ``a/b``, ``a/x/b``, ``a/x/y/b``).
+    * ``?`` — matches any single char except ``/``.
+
+    The returned regex is anchored with ``^`` and ``$`` so that
+    ``re.match(glob_to_regex("*.parquet"), "a.parquet.bak")`` returns ``None``.
+
+    Args:
+        pattern: Glob pattern (e.g. ``"candidates/*/dataset.yml"``).
+
+    Returns:
+        Anchored regex string (e.g. ``"^candidates/[^/]*/dataset\.yml$"``).
+
+    Example::
+
+        >>> import re
+        >>> rx = glob_to_regex("*.parquet")
+        >>> bool(re.match(rx, "data.parquet"))
+        True
+        >>> bool(re.match(rx, "a.parquet.bak"))  # anchored
+        False
+
+    """
+    parts: list[str] = []
+    i = 0
+    n = len(pattern)
+    while i < n:
+        c = pattern[i]
+        if c == "*" and i + 1 < n and pattern[i + 1] == "*":
+            if i + 2 < n and pattern[i + 2] == "/":
+                # **/ = zero o piu' directory level
+                parts.append("(?:.+/|)")
+                i += 3
+            else:
+                # ** = tutto (anche attraverso /)
+                parts.append(".*")
+                i += 2
+        elif c == "*":
+            parts.append("[^/]*")
+            i += 1
+        elif c == "?":
+            parts.append("[^/]")
+            i += 1
+        elif c in ".^$+{}[]\\|()":
+            parts.append("\\" + c)
+            i += 1
+        else:
+            parts.append(c)
+            i += 1
+    return "^" + "".join(parts) + "$"
+
 
 # ---------------------------------------------------------------------------
 # Convenience functions usate dai consumer
@@ -133,6 +230,8 @@ __all__ = [
     "resolve",
     "gs_url",
     "https_url",
+    "parse_gs_url",
+    "glob_to_regex",
     "CLEAN_BUCKET",
     "MART_BUCKET",
     "pipeline_run",

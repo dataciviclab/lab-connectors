@@ -12,6 +12,7 @@ Copre:
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -22,10 +23,12 @@ from lab_connectors.gcs.paths import (
     MART_BUCKET,
     catalog_manifest,
     get_bucket,
+    glob_to_regex,
     gs_url,
     https_url,
     load_contract,
     mart_parquet,
+    parse_gs_url,
     pipeline_run,
     resolve,
 )
@@ -295,6 +298,98 @@ class TestPathsContract(unittest.TestCase):
         )
         self.assertEqual(CB, "dataciviclab-clean")
         self.assertEqual(RSLV("catalog_manifest"), "catalog/manifest.json")
+
+
+# ── parse_gs_url ────────────────────────────────────────────────────────────
+
+
+class TestParseGsUrl(unittest.TestCase):
+    """parse_gs_url: parsing di URL gs://."""
+
+    def test_parse_full_url(self) -> None:
+        bucket, key = parse_gs_url("gs://dataciviclab-clean/demo/2024/file.parquet")
+        self.assertEqual(bucket, "dataciviclab-clean")
+        self.assertEqual(key, "demo/2024/file.parquet")
+
+    def test_parse_bucket_only(self) -> None:
+        with pytest.raises(ValueError):
+            parse_gs_url("gs://bucket-only")
+
+    def test_parse_no_prefix_invalid(self) -> None:
+        with pytest.raises(ValueError, match="gs://"):
+            parse_gs_url("https://storage.googleapis.com/bucket/file.parquet")
+
+    def test_parse_deep_path(self) -> None:
+        bucket, key = parse_gs_url(
+            "gs://dataciviclab-clean/catalog_inventory/source-check/source_check_results.parquet"
+        )
+        self.assertEqual(bucket, "dataciviclab-clean")
+        self.assertEqual(
+            key,
+            "catalog_inventory/source-check/source_check_results.parquet",
+        )
+
+    def test_parse_empty_path(self) -> None:
+        with pytest.raises(ValueError):
+            parse_gs_url("gs://")
+
+    def test_parse_no_bucket_name(self) -> None:
+        """gs:/// senza bucket: bucket vuoto, key valida."""
+        bucket, key = parse_gs_url("gs:///path/to/file.parquet")
+        self.assertEqual(bucket, "")
+        self.assertEqual(key, "path/to/file.parquet")
+
+
+# ── glob_to_regex ──────────────────────────────────────────────────────────
+
+
+class TestGlobToRegex(unittest.TestCase):
+    """glob_to_regex: conversione glob → regex con anchor."""
+
+    def test_single_star(self) -> None:
+        rx = glob_to_regex("*.parquet")
+        self.assertIsNotNone(re.match(rx, "data.parquet"))
+        self.assertIsNone(re.match(rx, "a.parquet.bak"))  # anchored
+
+    def test_double_star_recursive(self) -> None:
+        rx = glob_to_regex("foo/**/bar.parquet")
+        self.assertIsNotNone(re.match(rx, "foo/bar.parquet"))         # zero depth
+        self.assertIsNotNone(re.match(rx, "foo/x/bar.parquet"))       # one level
+        self.assertIsNotNone(re.match(rx, "foo/x/y/bar.parquet"))     # two levels
+        self.assertIsNone(re.match(rx, "foo/abcbar.parquet"))         # no dir boundary
+
+    def test_double_star_alone(self) -> None:
+        rx = glob_to_regex("foo/**")
+        self.assertIsNotNone(re.match(rx, "foo/bar.parquet"))
+        self.assertIsNotNone(re.match(rx, "foo/a/b/c.parquet"))
+
+    def test_double_star_at_start(self) -> None:
+        rx = glob_to_regex("**/dataset.yml")
+        self.assertIsNotNone(re.match(rx, "dataset.yml"))
+        self.assertIsNotNone(re.match(rx, "candidates/x/dataset.yml"))
+        self.assertIsNotNone(re.match(rx, "candidates/a/b/dataset.yml"))
+
+    def test_single_star_no_cross_dir(self) -> None:
+        rx = glob_to_regex("candidates/*/dataset.yml")
+        self.assertIsNotNone(re.match(rx, "candidates/x/dataset.yml"))
+        self.assertIsNone(re.match(rx, "candidates/a/b/dataset.yml"))  # * non attraversa /
+
+    def test_question_mark(self) -> None:
+        rx = glob_to_regex("data_202?.parquet")
+        self.assertIsNotNone(re.match(rx, "data_2023.parquet"))
+        self.assertIsNone(re.match(rx, "data_2023.csv"))
+        self.assertIsNone(re.match(rx, "data_2023.parquet.bak"))  # anchored
+
+    def test_special_chars_escaped(self) -> None:
+        rx = glob_to_regex("path/to/file+special(1).parquet")
+        self.assertIsNotNone(re.match(rx, "path/to/file+special(1).parquet"))
+        self.assertIsNone(re.match(rx, "path/to/fileXspecial(1).parquet"))
+
+    def test_multiple_stars(self) -> None:
+        rx = glob_to_regex("a/*/b/**/c.parquet")
+        self.assertIsNotNone(re.match(rx, "a/x/b/c.parquet"))
+        self.assertIsNotNone(re.match(rx, "a/x/b/y/c.parquet"))
+        self.assertIsNone(re.match(rx, "a/xy/b/c.parquet.bak"))  # anchored
 
 
 class TestPathsJsonPackaging(unittest.TestCase):
