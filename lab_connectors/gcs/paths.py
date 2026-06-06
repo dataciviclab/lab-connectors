@@ -136,23 +136,33 @@ MART_BUCKET: str = get_bucket("mart")
 
 
 def glob_to_regex(pattern: str) -> str:
-    r"""Convert a glob pattern to regex.
+    r"""Convert a glob pattern to an anchored regex (``^...$``).
 
-    Supporta ``*`` (qualsiasi sequenza), ``**`` (qualsiasi profondità),
-    e ``?`` (un carattere).
+    Supported wildcards:
+
+    * ``*`` — matches any chars except ``/`` (single directory component).
+    * ``**`` — matches any chars including ``/``.
+    * ``**/`` — matches zero or more directory levels (``a/**/b`` matches
+      ``a/b``, ``a/x/b``, ``a/x/y/b``).
+    * ``?`` — matches any single char except ``/``.
+
+    The returned regex is anchored with ``^`` and ``$`` so that
+    ``re.match(glob_to_regex("*.parquet"), "a.parquet.bak")`` returns ``None``.
 
     Args:
-        pattern: Pattern glob (es. ``"candidates/*/dataset.yml"``).
+        pattern: Glob pattern (e.g. ``"candidates/*/dataset.yml"``).
 
     Returns:
-        Stringa regex (es. ``"candidates/[^/]*/dataset\.yml"``).
+        Anchored regex string (e.g. ``"^candidates/[^/]*/dataset\.yml$"``).
 
     Example::
 
         >>> import re
         >>> rx = glob_to_regex("*.parquet")
-        >>> re.match(rx, "data.parquet") is not None
+        >>> bool(re.match(rx, "data.parquet"))
         True
+        >>> bool(re.match(rx, "a.parquet.bak"))  # anchored
+        False
 
     """
     parts: list[str] = []
@@ -161,17 +171,19 @@ def glob_to_regex(pattern: str) -> str:
     while i < n:
         c = pattern[i]
         if c == "*" and i + 1 < n and pattern[i + 1] == "*":
-            # ** = qualsiasi profondità
-            parts.append(".*")
-            i += 2
-            # skip eventuale /
-            if i < n and pattern[i] == "/":
-                i += 1
+            if i + 2 < n and pattern[i + 2] == "/":
+                # **/ = zero o piu' directory level
+                parts.append("(?:.+/|)")
+                i += 3
+            else:
+                # ** = tutto (anche attraverso /)
+                parts.append(".*")
+                i += 2
         elif c == "*":
             parts.append("[^/]*")
             i += 1
         elif c == "?":
-            parts.append(".")
+            parts.append("[^/]")
             i += 1
         elif c in ".^$+{}[]\\|()":
             parts.append("\\" + c)
@@ -179,7 +191,7 @@ def glob_to_regex(pattern: str) -> str:
         else:
             parts.append(c)
             i += 1
-    return "".join(parts)
+    return "^" + "".join(parts) + "$"
 
 
 # ---------------------------------------------------------------------------

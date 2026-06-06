@@ -110,3 +110,44 @@ class TestSafeConnectErrors:
         with safe_connect(":memory:") as con:
             con.close()
         # Il test passa — siamo usciti dal context manager
+
+
+class TestSafeConnectExtensions:
+    """safe_connect — parametri extensions e config."""
+
+    def test_default_backward_compat(self) -> None:
+        """Nessun parametro = comportamento identico al passato."""
+        with safe_connect() as con:
+            r = con.execute("SELECT 1 AS x").fetchall()
+        assert r == [(1,)]
+
+    def test_httpfs_extension_loads(self) -> None:
+        """Caricamento estensione httpfs (se disponibile)."""
+        try:
+            with safe_connect(extensions=["httpfs"]) as con:
+                con.execute("SELECT 1")
+        except duckdb.IOException as exc:
+            if "HTTP" in str(exc) or "extension" in str(exc):
+                pytest.skip("httpfs extension not available")
+            raise
+
+    def test_config_memory_limit(self) -> None:
+        """Config DuckDB passata correttamente.
+
+        DuckDB converte ``512 MB`` nel suo formato interno
+        (es. ``'488.2 MiB'``). Verifichiamo che il setting sia
+        stato applicato controllando il suffisso MiB.
+        """
+        with safe_connect(config={"memory_limit": "512MB"}) as con:
+            row = con.execute(
+                "SELECT value FROM duckdb_settings() WHERE name = 'memory_limit'"
+            ).fetchone()
+        assert row is not None
+        value = str(row[0])
+        assert value.endswith("MiB"), f"MiB atteso, ottenuto {value!r}"
+
+    def test_unknown_extension_raises(self) -> None:
+        """Estensione inesistente solleva eccezione."""
+        with pytest.raises(duckdb.IOException):
+            with safe_connect(extensions=["nonexistent_extension_xyz"]):
+                pass
