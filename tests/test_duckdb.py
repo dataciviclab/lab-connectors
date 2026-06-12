@@ -156,6 +156,47 @@ class TestSafeConnectExtensions:
                 pass
 
 
+class TestDefaultConfig:
+    """Configurazioni di default safe_connect."""
+
+    def test_memory_limit_default_applied(self) -> None:
+        """safe_connect applica memory_limit di default (~2 GB → ~1.8 GiB)."""
+        import re
+
+        with safe_connect() as con:
+            row = con.execute(
+                "SELECT value FROM duckdb_settings() WHERE name = 'memory_limit'"
+            ).fetchone()
+        assert row is not None
+        value = str(row[0])
+        match = re.match(r"^(\d+\.?\d*)\s*GiB", value)
+        assert match is not None, f"Expected ~2 GiB, got {value!r}"
+        gib_value = float(match.group(1))
+        # 2 GB → ~1.8 GiB in DuckDB (binary conversion)
+        assert 1.7 <= gib_value <= 1.9, f"Expected ~1.8 GiB, got {gib_value} GiB"
+
+    def test_config_overrides_default(self) -> None:
+        """Config esplicita sovrascrive memory_limit di default."""
+        with safe_connect(config={"memory_limit": "512MB"}) as con:
+            row = con.execute(
+                "SELECT value FROM duckdb_settings() WHERE name = 'memory_limit'"
+            ).fetchone()
+        assert row is not None
+        value = str(row[0])
+        # 512MB → DuckDB mostra circa 488 MiB
+        assert "488" in value or "512" in value
+
+    def test_progress_bar_disabled(self) -> None:
+        """safe_connect disabilita la progress bar."""
+        with safe_connect() as con:
+            row = con.execute(
+                "SELECT value FROM duckdb_settings() WHERE name = 'enable_progress_bar'"
+            ).fetchone()
+        assert row is not None
+        # disable_progress_bar ⇒ enable_progress_bar = false
+        assert str(row[0]).lower() == "false"
+
+
 class TestGcsConnect:
     """gcs_connect — helper per GCS S3 / locale."""
 
