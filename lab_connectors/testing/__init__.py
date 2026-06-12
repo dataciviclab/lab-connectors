@@ -228,6 +228,19 @@ class _FakeResponse:
         """Enter context manager — returns self (no-op)."""
         return self
 
+    def close(self) -> None:
+        """No-op. Compatibile con ``requests.Response.close()`` per streaming."""
+
+    def iter_content(self, chunk_size: int = 65536) -> object:
+        """Compatibile con ``requests.Response.iter_content()``.
+
+        Itera su ``self.content`` a chunk, cosi' che ``fetch_content()``
+        con ``stream=True`` funzioni anche nei test.
+        """
+        data = self.content
+        for i in range(0, len(data), chunk_size):
+            yield data[i : i + chunk_size]
+
     def __exit__(self, *args: Any) -> None:
         """Exit context manager — no-op."""
 
