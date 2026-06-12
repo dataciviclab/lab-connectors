@@ -26,6 +26,16 @@ class HttpFallbackError(Exception):
         )
 
 
+class CircuitOpenError(Exception):
+    """Request skipped because the circuit breaker is open for that host.
+
+    The circuit is per-host: after ``circuit_threshold`` consecutive errors
+    (timeout, connection error, HTTP 5xx) on the same host, subsequent
+    requests to that host return this error immediately without making a
+    network call.
+    """
+
+
 @dataclass
 class HttpResult:
     """Result of an HTTP request.
