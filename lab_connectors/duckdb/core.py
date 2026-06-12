@@ -9,11 +9,11 @@ quindi funziona anche su runner CI pulito.
 
 Configurazioni di default applicate automaticamente (override via ``config``):
     - ``memory_limit``: ``'2GB'``
-    - ``threads``: ``'4'``
     - ``PRAGMA disable_progress_bar``: sempre attivo
 
-Estensione ``icu``: se inclusa in ``extensions``, safe_connect applica anche
-``SET icu_collation='it-IT'`` dopo il caricamento.
+Estensione ``icu``: caricabile ma senza side-effect sulla collation globale.
+Chi necessita collation italiana usa ``SET default_collation='it'`` esplicitamente
+dopo la connessione, oppure ``COLLATE "it"`` nelle query.
 
 Uso::
 
@@ -30,9 +30,10 @@ Uso::
     with safe_connect(config=GCS_S3_CONFIG) as con:
         con.execute("SELECT * FROM read_parquet('s3://bucket/file.parquet')")
 
-    # Collation italiana
+    # Collation italiana — esplicita, non automatica
     with safe_connect(extensions=["icu"]) as con:
-        con.execute("SELECT * FROM read_parquet(...) ORDER BY città COLLATE it-IT")
+        con.execute("SET default_collation='it'")
+        con.execute("SELECT * FROM read_parquet(...) ORDER BY città")
 """
 
 from __future__ import annotations
@@ -57,11 +58,9 @@ GCS_S3_CONFIG: dict[str, str] = {
 # ── Configurazioni di default DuckDB per il Lab ──────────────────────────────
 # Applicate da safe_connect se non sovrascritte dalla config esplicita.
 # memory_limit: limite ragionevole per container/CI.
-# threads: evita saturazione CPU su runner condivisi.
 
 DEFAULT_CONFIG: dict[str, str] = {
     "memory_limit": "2GB",
-    "threads": "4",
 }
 
 
@@ -73,12 +72,9 @@ def safe_connect(
 ) -> Generator[Any, None, None]:
     """Context manager per connessioni DuckDB.
 
-    Applica automaticamente ``DEFAULT_CONFIG`` (memory_limit, threads)
+    Applica automaticamente ``DEFAULT_CONFIG`` (memory_limit)
     e ``PRAGMA disable_progress_bar``. I valori in ``config`` sovrascrivono
     i default.
-
-    Se ``"icu"`` è in ``extensions``, applica anche ``SET icu_collation='it-IT'``
-    dopo il caricamento.
 
     ``INSTALL`` + ``LOAD`` per ogni estensione specificata.
     ``INSTALL`` è idempotente — sicuro su runner con estensione già presente.
@@ -111,9 +107,6 @@ def safe_connect(
             for ext in extensions:
                 con.execute(f"INSTALL {ext}")
                 con.execute(f"LOAD {ext}")
-                # Per l'estensione ICU, imposta collation italiana di default
-                if ext == "icu":
-                    con.execute("SET default_collation='it'")
         yield con
     finally:
         try:
