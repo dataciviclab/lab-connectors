@@ -160,11 +160,7 @@ class TestDefaultConfig:
     """Configurazioni di default safe_connect."""
 
     def test_memory_limit_default_applied(self) -> None:
-        """safe_connect applica memory_limit di default (~2 GiB).
-
-        DuckDB converte 2 GB in GiB (base 2). Il test verifica che
-        il valore sia nell'ordine di grandezza atteso (1–3 GiB).
-        """
+        """safe_connect applica memory_limit di default (~2 GB → ~1.8 GiB)."""
         import re
 
         with safe_connect() as con:
@@ -176,7 +172,8 @@ class TestDefaultConfig:
         match = re.match(r"^(\d+\.?\d*)\s*GiB", value)
         assert match is not None, f"Expected ~2 GiB, got {value!r}"
         gib_value = float(match.group(1))
-        assert 1.0 <= gib_value <= 3.0, f"Expected ~2 GiB, got {gib_value} GiB"
+        # 2 GB → ~1.8 GiB in DuckDB (binary conversion)
+        assert 1.7 <= gib_value <= 1.9, f"Expected ~1.8 GiB, got {gib_value} GiB"
 
     def test_config_overrides_default(self) -> None:
         """Config esplicita sovrascrive memory_limit di default."""
