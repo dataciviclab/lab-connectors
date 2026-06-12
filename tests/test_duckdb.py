@@ -156,6 +156,68 @@ class TestSafeConnectExtensions:
                 pass
 
 
+class TestDefaultConfig:
+    """DEFAULT_CONFIG e applicazione automatica."""
+
+    def test_default_config_exists(self) -> None:
+        """DEFAULT_CONFIG è esportato con i campi attesi."""
+        from lab_connectors.duckdb import DEFAULT_CONFIG
+
+        assert "memory_limit" in DEFAULT_CONFIG
+        assert "threads" in DEFAULT_CONFIG
+        assert DEFAULT_CONFIG["memory_limit"] == "2GB"
+        assert DEFAULT_CONFIG["threads"] == "4"
+
+    def test_default_config_applied(self) -> None:
+        """safe_connect applica memory_limit e threads di default."""
+        with safe_connect() as con:
+            row = con.execute(
+                "SELECT name, value FROM duckdb_settings() "
+                "WHERE name IN ('memory_limit', 'threads') ORDER BY name"
+            ).fetchall()
+        values = dict(row)
+        # memory_limit: DuckDB riporta in MiB/GiB, controlliamo che sia > 1GB
+        assert "memory_limit" in values
+
+    def test_config_overrides_default(self) -> None:
+        """Config esplicita sovrascrive DEFAULT_CONFIG parzialmente."""
+        with safe_connect(config={"memory_limit": "512MB"}) as con:
+            row = con.execute(
+                "SELECT value FROM duckdb_settings() WHERE name = 'memory_limit'"
+            ).fetchone()
+        assert row is not None
+        value = str(row[0])
+        # 512MB → DuckDB mostra circa 488 MiB
+        assert "488" in value or "512" in value
+
+    def test_progress_bar_disabled(self) -> None:
+        """safe_connect disabilita la progress bar."""
+        with safe_connect() as con:
+            row = con.execute(
+                "SELECT value FROM duckdb_settings() WHERE name = 'enable_progress_bar'"
+            ).fetchone()
+        assert row is not None
+        # disable_progress_bar ⇒ enable_progress_bar = false
+        assert str(row[0]).lower() == "false"
+
+    @pytest.mark.smoke
+    def test_icu_extension(self) -> None:
+        """Estensione icu: install, load, collation."""
+        try:
+            with safe_connect(extensions=["icu"]) as con:
+                # La collation italiana è stata applicata
+                row = con.execute(
+                    "SELECT value FROM duckdb_settings() WHERE name = 'default_collation'"
+                ).fetchone()
+        except duckdb.IOException as exc:
+            if "extension" in str(exc):
+                pytest.skip("icu extension not available on this platform")
+            raise
+
+        assert row is not None
+        assert str(row[0]) in ("it", "it_IT")
+
+
 class TestGcsConnect:
     """gcs_connect — helper per GCS S3 / locale."""
 

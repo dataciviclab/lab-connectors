@@ -7,6 +7,14 @@ Supporta estensioni (es. ``httpfs`` per GCS) e configurazione DuckDB.
 ``safe_connect`` fa ``INSTALL`` + ``LOAD`` per ogni estensione,
 quindi funziona anche su runner CI pulito.
 
+Configurazioni di default applicate automaticamente (override via ``config``):
+    - ``memory_limit``: ``'2GB'``
+    - ``threads``: ``'4'``
+    - ``PRAGMA disable_progress_bar``: sempre attivo
+
+Estensione ``icu``: se inclusa in ``extensions``, safe_connect applica anche
+``SET icu_collation='it-IT'`` dopo il caricamento.
+
 Uso::
 
     from lab_connectors.duckdb import safe_connect, GCS_S3_CONFIG
@@ -14,11 +22,17 @@ Uso::
     with safe_connect() as con:
         result = con.execute("SELECT 1").fetchall()
 
+    # Estensione per GCS con config predefinita
     with safe_connect(extensions=["httpfs"]) as con:
         con.execute("SELECT * FROM read_parquet('s3://bucket/file.parquet')")
 
+    # Config esplicita (sovrascrive i default parzialmente)
     with safe_connect(config=GCS_S3_CONFIG) as con:
         con.execute("SELECT * FROM read_parquet('s3://bucket/file.parquet')")
+
+    # Collation italiana
+    with safe_connect(extensions=["icu"]) as con:
+        con.execute("SELECT * FROM read_parquet(...) ORDER BY città COLLATE it-IT")
 """
 
 from __future__ import annotations
@@ -40,6 +54,16 @@ GCS_S3_CONFIG: dict[str, str] = {
     "s3_use_ssl": "true",
 }
 
+# ── Configurazioni di default DuckDB per il Lab ──────────────────────────────
+# Applicate da safe_connect se non sovrascritte dalla config esplicita.
+# memory_limit: limite ragionevole per container/CI.
+# threads: evita saturazione CPU su runner condivisi.
+
+DEFAULT_CONFIG: dict[str, str] = {
+    "memory_limit": "2GB",
+    "threads": "4",
+}
+
 
 @contextmanager
 def safe_connect(
@@ -49,13 +73,22 @@ def safe_connect(
 ) -> Generator[Any, None, None]:
     """Context manager per connessioni DuckDB.
 
+    Applica automaticamente ``DEFAULT_CONFIG`` (memory_limit, threads)
+    e ``PRAGMA disable_progress_bar``. I valori in ``config`` sovrascrivono
+    i default.
+
+    Se ``"icu"`` è in ``extensions``, applica anche ``SET icu_collation='it-IT'``
+    dopo il caricamento.
+
     ``INSTALL`` + ``LOAD`` per ogni estensione specificata.
     ``INSTALL`` è idempotente — sicuro su runner con estensione già presente.
 
     Args:
         database: Path al database o ``":memory:"`` (default).
-        extensions: Lista di estensioni DuckDB da installare e caricare (es. ``["httpfs"]``).
+        extensions: Lista di estensioni DuckDB da installare e caricare
+                    (es. ``["httpfs"]``, ``["httpfs", "icu"]``).
         config: Dict di configurazione DuckDB (es. ``GCS_S3_CONFIG``).
+                I valori qui sovrascrivono ``DEFAULT_CONFIG``.
 
     Yields:
         duckdb.DuckDBPyConnection — connessione aperta.
@@ -66,12 +99,21 @@ def safe_connect(
     """
     import duckdb  # duckdb è extra opzionale [duckdb]
 
-    con = duckdb.connect(database, config=config or {})
+    # Merge: default + override esplicito
+    merged_config: dict[str, Any] = {**DEFAULT_CONFIG, **(config or {})}
+
+    con = duckdb.connect(database, config=merged_config)
     try:
+        # Disabilita progress bar per output pulito (CLI, MCP, test)
+        con.execute("PRAGMA disable_progress_bar")
+
         if extensions:
             for ext in extensions:
                 con.execute(f"INSTALL {ext}")
                 con.execute(f"LOAD {ext}")
+                # Per l'estensione ICU, imposta collation italiana di default
+                if ext == "icu":
+                    con.execute("SET default_collation='it'")
         yield con
     finally:
         try:

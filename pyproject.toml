@@ -27,7 +27,7 @@ gcs = [
     "google-cloud-storage>=2.19.0",
 ]
 duckdb = [
-    "duckdb>=1.0.0",
+    "duckdb>=1.5.3",
 ]
 dev = [
     "ruff>=0.8.0",

@@ -16,6 +16,6 @@ Uso::
 
 from __future__ import annotations
 
-from lab_connectors.duckdb.core import GCS_S3_CONFIG, gcs_connect, safe_connect
+from lab_connectors.duckdb.core import DEFAULT_CONFIG, GCS_S3_CONFIG, gcs_connect, safe_connect
 
-__all__ = ["GCS_S3_CONFIG", "gcs_connect", "safe_connect"]
+__all__ = ["DEFAULT_CONFIG", "GCS_S3_CONFIG", "gcs_connect", "safe_connect"]
