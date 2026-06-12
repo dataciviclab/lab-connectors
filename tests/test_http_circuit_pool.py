@@ -340,3 +340,47 @@ class TestGenericPool:
         # Verifica implicita: close() non solleva errori (session già chiusa
         # due volte è silenziosa in requests)
         pool.close()  # seconda chiamata non deve crashare
+
+
+# ── _FakeResponse streaming compat ─────────────────────────────────────────
+
+
+class TestFakeResponseStreaming:
+    @pytest.mark.contract
+    def test_iter_content_yields_full_content_when_smaller_than_chunk(self):
+        """Contenuto intero in un singolo chunk."""
+        from lab_connectors.testing import fake_response
+
+        resp = fake_response(200, text="hello")
+        chunks = list(resp.iter_content(chunk_size=1024))
+        assert chunks == [b"hello"]
+
+    @pytest.mark.contract
+    def test_iter_content_splits_into_multiple_chunks(self):
+        """Contenuto piu' grande del chunk size → multipli chunk."""
+        from lab_connectors.testing import fake_response
+
+        text = "a" * 100
+        resp = fake_response(200, text=text)
+        chunks = list(resp.iter_content(chunk_size=30))
+        assert len(chunks) == 4  # 100 // 30 = 3 resto 10 → 4 chunk
+        assert sum(len(c) for c in chunks) == 100
+        assert b"".join(chunks) == b"a" * 100
+
+    @pytest.mark.contract
+    def test_iter_content_empty_content(self):
+        """Content vuoto → nessun chunk."""
+        from lab_connectors.testing import fake_response
+
+        resp = fake_response(200, text="")
+        chunks = list(resp.iter_content())
+        assert chunks == []
+
+    @pytest.mark.policy
+    def test_close_is_noop(self):
+        """close() non solleva eccezioni."""
+        from lab_connectors.testing import fake_response
+
+        resp = fake_response(200, text="data")
+        resp.close()  # Non deve crashare
+        resp.close()  # Seconda chiamata ok (idempotente)
