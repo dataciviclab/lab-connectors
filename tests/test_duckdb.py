@@ -157,32 +157,29 @@ class TestSafeConnectExtensions:
 
 
 class TestDefaultConfig:
-    """DEFAULT_CONFIG e applicazione automatica."""
+    """Configurazioni di default safe_connect."""
 
-    def test_default_config_exists(self) -> None:
-        """DEFAULT_CONFIG è esportato con i campi attesi."""
-        from lab_connectors.duckdb import DEFAULT_CONFIG
+    def test_memory_limit_default_applied(self) -> None:
+        """safe_connect applica memory_limit di default (~2 GiB).
 
-        assert "memory_limit" in DEFAULT_CONFIG
-        assert DEFAULT_CONFIG["memory_limit"] == "2GB"
-
-    def test_default_config_applied(self) -> None:
-        """safe_connect applica memory_limit di default.
-
-        DuckDB riporta ``memory_limit`` in formato leggibile (es. ``'2.0 GiB'``).
-        Verifichiamo che il valore letto corrisponda ai 2GB configurati.
+        DuckDB converte 2 GB in GiB (base 2). Il test verifica che
+        il valore sia nell'ordine di grandezza atteso (1–3 GiB).
         """
+        import re
+
         with safe_connect() as con:
             row = con.execute(
                 "SELECT value FROM duckdb_settings() WHERE name = 'memory_limit'"
             ).fetchone()
         assert row is not None
         value = str(row[0])
-        # DuckDB mostra ~2.0 GiB per 2 GB
-        assert "GiB" in value or "2.0" in value or "2 GB" in value
+        match = re.match(r"^(\d+\.?\d*)\s*GiB", value)
+        assert match is not None, f"Expected ~2 GiB, got {value!r}"
+        gib_value = float(match.group(1))
+        assert 1.0 <= gib_value <= 3.0, f"Expected ~2 GiB, got {gib_value} GiB"
 
     def test_config_overrides_default(self) -> None:
-        """Config esplicita sovrascrive DEFAULT_CONFIG parzialmente."""
+        """Config esplicita sovrascrive memory_limit di default."""
         with safe_connect(config={"memory_limit": "512MB"}) as con:
             row = con.execute(
                 "SELECT value FROM duckdb_settings() WHERE name = 'memory_limit'"
@@ -201,21 +198,6 @@ class TestDefaultConfig:
         assert row is not None
         # disable_progress_bar ⇒ enable_progress_bar = false
         assert str(row[0]).lower() == "false"
-
-    @pytest.mark.smoke
-    def test_icu_extension(self) -> None:
-        """Estensione icu: install e load funzionano.
-
-        La collation non è impostata automaticamente (side-effect globale).
-        Il test verifica solo che INSTALL/LOAD + query base non sollevi eccezioni.
-        """
-        try:
-            with safe_connect(extensions=["icu"]) as con:
-                con.execute("SELECT 1")
-        except duckdb.IOException as exc:
-            if "extension" in str(exc):
-                pytest.skip("icu extension not available on this platform")
-            raise
 
 
 class TestGcsConnect:

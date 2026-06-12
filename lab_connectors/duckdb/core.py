@@ -59,7 +59,7 @@ GCS_S3_CONFIG: dict[str, str] = {
 # Applicate da safe_connect se non sovrascritte dalla config esplicita.
 # memory_limit: limite ragionevole per container/CI.
 
-DEFAULT_CONFIG: dict[str, str] = {
+_DEFAULT_CONFIG: dict[str, str] = {
     "memory_limit": "2GB",
 }
 
@@ -72,7 +72,7 @@ def safe_connect(
 ) -> Generator[Any, None, None]:
     """Context manager per connessioni DuckDB.
 
-    Applica automaticamente ``DEFAULT_CONFIG`` (memory_limit)
+    Applica automaticamente ``_DEFAULT_CONFIG`` (``memory_limit='2GB'``)
     e ``PRAGMA disable_progress_bar``. I valori in ``config`` sovrascrivono
     i default.
 
@@ -84,7 +84,7 @@ def safe_connect(
         extensions: Lista di estensioni DuckDB da installare e caricare
                     (es. ``["httpfs"]``, ``["httpfs", "icu"]``).
         config: Dict di configurazione DuckDB (es. ``GCS_S3_CONFIG``).
-                I valori qui sovrascrivono ``DEFAULT_CONFIG``.
+                I valori qui sovrascrivono ``_DEFAULT_CONFIG``.
 
     Yields:
         duckdb.DuckDBPyConnection — connessione aperta.
@@ -96,7 +96,7 @@ def safe_connect(
     import duckdb  # duckdb è extra opzionale [duckdb]
 
     # Merge: default + override esplicito
-    merged_config: dict[str, Any] = {**DEFAULT_CONFIG, **(config or {})}
+    merged_config: dict[str, Any] = {**_DEFAULT_CONFIG, **(config or {})}
 
     con = duckdb.connect(database, config=merged_config)
     try:
