@@ -17,7 +17,7 @@ Usage::
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import requests
@@ -231,7 +231,7 @@ class _FakeResponse:
     def close(self) -> None:
         """No-op. Compatibile con ``requests.Response.close()`` per streaming."""
 
-    def iter_content(self, chunk_size: int = 65536) -> object:
+    def iter_content(self, chunk_size: int = 65536) -> Iterator[bytes]:
         """Compatibile con ``requests.Response.iter_content()``.
 
         Itera su ``self.content`` a chunk, cosi' che ``fetch_content()``
