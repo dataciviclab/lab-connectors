@@ -78,7 +78,7 @@ graphs = discover_graphs("https://semantic.istat.it/sparql")
 |---|---|
 | `HttpResult` | Risultato HTTP: `response`, `err`, `is_ok`, `ssl_fallback_used` |
 | `HttpFallbackError` | Wrapper per errori durante retry/fallback |
-| `CircuitOpenError` | Sollevato se il circuit breaker è aperto (troppi errori consecutivi) |
+| `CircuitOpenError` | Restituito in `HttpResult.err` se il circuit breaker è aperto (troppi errori consecutivi sullo stesso host) |
 
 ---
 
@@ -373,8 +373,9 @@ resp = fake_response(
 
 #### `audit-test-markers` — CLI per audit marker pytest
 
+Disponibile con l'installazione base (dipende solo da stdlib).
+
 ```bash
-pip install lab-connectors[dev]  # include dipendenze audit
 audit-test-markers tests/
 ```
 
@@ -398,8 +399,8 @@ pip install lab-connectors[duckdb]
 # Con GCS
 pip install lab-connectors[gcs]
 
-# Con testing utilities
-pip install lab-connectors[dev]
+# Con testing utilities (FakeHttpClient, audit CLI — già nel base install)
+pip install lab-connectors
 
 # Sviluppo locale (tutto)
 pip install -e ".[dev,mcp,gcs,duckdb]"

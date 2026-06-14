@@ -30,17 +30,15 @@ Qui non stanno:
 
 `lab-connectors` è una dipendenza pip degli altri repo del Lab:
 
-| Repo | Dipende da |
-|---|---|
-Il core HTTP è sempre incluso nell'installazione base. Gli extra opzionali aggiungono funzionalità specifiche.
+Gli extra dichiarati nei manifest dei repo downstream (quando presenti) attivano dipendenze opzionali di lab-connectors.
 
-| Repo | Extra installati | Moduli usati |
+| Repo | Extra dichiarati | Moduli lab-connectors usati |
 |---|---|---|
-| `toolkit` | `[mcp,duckdb]` | http, mcp, duckdb |
-| `source-observatory` | `[gcs,mcp,duckdb]` | http, gcs, mcp, duckdb |
-| `dataset-incubator` | `[gcs,mcp,duckdb]` | gcs, mcp, duckdb |
-| `data-explorer` | `[duckdb,gcs]` | duckdb, gcs (path) |
-| `agent-context-builder` | `[mcp]` | http, mcp |
+| `toolkit` | `[duckdb]` | http, mcp, duckdb |
+| `source-observatory` | `[duckdb,gcs]` | http, gcs, mcp, duckdb |
+| `dataset-incubator` | `[duckdb,gcs]` | http, gcs, mcp, duckdb |
+| `data-explorer` | — (base) | duckdb, gcs (path) |
+| `agent-context-builder` | — (base) | http, mcp |
 | `lab-dashboard` | — (base) | gcs (path) |
 
 Se modifichi `lab-connectors`, potresti impattare tutti questi repo.
@@ -87,8 +85,8 @@ pip install lab-connectors[duckdb]
 # Con GCS
 pip install lab-connectors[gcs]
 
-# Con testing utilities (FakeHttpClient, audit CLI)
-pip install lab-connectors[dev]
+# Con testing utilities (FakeHttpClient, audit CLI — già nel base install)
+pip install lab-connectors
 
 # Sviluppo locale (tutto)
 pip install -e ".[dev,mcp,gcs,duckdb]"
