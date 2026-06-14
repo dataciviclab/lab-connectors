@@ -34,24 +34,28 @@ result = client.post("https://example.com/api", json={"query": "..."})
 
 | Parametro | Default | Descrizione |
 |---|---|---|
-| `timeout` | `(10, 30)` | Timeout connect/read in secondi |
-| `max_retries` | `3` | Tentativi massimi (incluso il primo) |
-| `retry_backoff` | `1.0` | Base backoff esponenziale in secondi |
-| `retry_jitter` | `0.0` | Jitter casuale (secondi) per evitare thundering herd |
-| `circuit_threshold` | `0` | Errori consecutivi per aprire il circuit breaker (0 = disabilitato) |
-| `user_agent` | `DataCivicLab-HttpClient/...` | User-Agent per le richieste |
+| `timeout` | `60` | Timeout in secondi (int o tupla (connect, read)) |
+| `max_retries` | `2` | Tentativi massimi (incluso il primo; 2 = 1 tentativo + 1 retry) |
+| `retry_backoff` | `1.0` | Base backoff esponenziale: `backoff * 2^(attempt-1)` |
+| `retry_jitter` | `0.0` | Fattore di randomizzazione (±jitter%). 0.1 = ±10%. Disabilitato di default |
+| `circuit_threshold` | `0` | Errori consecutivi per aprire il circuit breaker per-host (0 = disabilitato) |
+| `user_agent` | `DataCivicLab-HttpClient/0.1` | User-Agent per le richieste |
 
 #### `GenericPool` — thread pool per richieste parallele
 
-Wrapper su `concurrent.futures.ThreadPoolExecutor` per eseguire richieste HTTP in parallelo.
+Wrapper su `concurrent.futures.ThreadPoolExecutor` per eseguire richieste HTTP in parallelo. API: `submit(method, url)` + `wait(futures)`.
 
 ```python
-from lab_connectors.http import GenericPool, HttpResult
+from lab_connectors.http import HttpClient, HttpResult
+from lab_connectors.http.pool import GenericPool
 
-pool = GenericPool(max_workers=5)
-results: list[HttpResult] = pool.run(
-    [(client.get, {"url": f"https://example.com/page/{i}"}) for i in range(20)]
-)
+pool = GenericPool(workers=5)
+futures = {}
+for url in urls:
+    futures[pool.submit("head", url)] = url
+
+# results in submission order
+results: list[HttpResult] = GenericPool.wait(list(futures))
 ```
 
 #### Client SPARQL
@@ -72,7 +76,7 @@ graphs = discover_graphs("https://semantic.istat.it/sparql")
 
 | Tipo | Descrizione |
 |---|---|
-| `HttpResult` | Risultato HTTP: `response`, `err`, `is_ok`, `ssl_fallback_used`, `elapsed_ms` |
+| `HttpResult` | Risultato HTTP: `response`, `err`, `is_ok`, `ssl_fallback_used` |
 | `HttpFallbackError` | Wrapper per errori durante retry/fallback |
 | `CircuitOpenError` | Sollevato se il circuit breaker è aperto (troppi errori consecutivi) |
 
@@ -192,7 +196,8 @@ upload_file("/tmp/file.parquet", "dataciviclab-clean", "slug/2024/file.parquet")
 upload_string('{"key": "value"}', "dataciviclab-clean", "slug/2024/manifest.json")
 
 # Verify public reachability (HEAD + Range fallback)
-ok = check_public("dataciviclab-clean", "slug/2024/file.parquet")
+ok = check_public("https://storage.googleapis.com/dataciviclab-clean/slug/2024/file.parquet")
+# → {"accessible": True, "status_code": 200, "content_type": "application/octet-stream"}
 ```
 
 #### Requisiti
@@ -201,7 +206,7 @@ ok = check_public("dataciviclab-clean", "slug/2024/file.parquet")
 pip install lab-connectors[gcs]
 ```
 
-La modalità `auth=False`, `object_exists()` e `check_public()` non richiedono il SDK — funzionano con sole librerie stdlib.
+La modalità `auth=False`, `object_exists()` e `check_public()` non richiedono il SDK — funzionano con sole librerie stdlib. `upload_file()` e `upload_string()` richiedono invece SDK autenticato.
 
 #### Path contract GCS (`lab_connectors.gcs.paths`)
 
@@ -240,24 +245,31 @@ from lab_connectors.gcs.paths import (
 path = resolve("clean_parquet", slug="ispra_ru_base", year=2024)
 # → "ispra_ru_base/2024/ispra_ru_base_2024_clean.parquet"
 
-# URL GCS
-gs = gs_url(CLEAN_BUCKET, "ispra_ru_base/2024/data.parquet")
-# → "gs://dataciviclab-clean/ispra_ru_base/2024/data.parquet"
+# URL GCS (bucket_key + pattern_key + kwargs del pattern)
+gs = gs_url("clean", "clean_parquet", slug="ispra_ru_base", year=2024)
+# → "gs://dataciviclab-clean/ispra_ru_base/2024/ispra_ru_base_2024_clean.parquet"
 
 # URL HTTPS pubblico
-https = https_url(CLEAN_BUCKET, "ispra_ru_base/2024/data.parquet")
-# → "https://storage.googleapis.com/dataciviclab-clean/ispra_ru_base/2024/data.parquet"
+https = https_url("clean", "clean_parquet", slug="ispra_ru_base", year=2024)
+# → "https://storage.googleapis.com/dataciviclab-clean/.../ispra_ru_base_2024_clean.parquet"
 
-# Parsing e pattern matching
-bucket, path = parse_gs_url("gs://dataciviclab-clean/slug/file.parquet")
-matched = glob_to_regex("dataciviclab-clean", "*/2024/*.parquet")
+# Parsing URL gs:// in (bucket, key)
+bucket, key = parse_gs_url("gs://dataciviclab-clean/slug/file.parquet")
 
-# Convenience function per pattern specifici
+# Glob pattern → regex (un argomento)
+import re
+rx = glob_to_regex("*/2024/*.parquet")
+bool(re.match(rx, "slug/2024/data.parquet"))  # True
+
+# Convenience function — restituiscono path relativo (str)
 run = pipeline_run(slug="ispra_ru_base", year=2024)
-# → GcsPath con bucket, path, gs_url, https_url
+# → "ispra_ru_base/2024/pipeline_run.json"
 
 manifest = catalog_manifest()
+# → "catalog/manifest.json"
+
 parquet = mart_parquet(slug="demo", year=2024, table="summary")
+# → "demo/2024/summary.parquet"
 ```
 
 ---
@@ -327,19 +339,19 @@ from lab_connectors.http import HttpResult
 
 fake = FakeHttpClient()
 
-# Registra risposta per URL specifico
-fake.responses["https://example.com/data.csv"] = HttpResult(
-    response=fake_response(200, "col1,col2\n1,2"),
+# Registra risposta JSON per URL specifico
+fake.responses["https://example.com/api/data"] = HttpResult(
+    response=fake_response(200, '{"values": [1, 2, 3]}'),
     err=None,
 )
 
 # Usa il client normalmente — nessuna HTTP reale
-result = fake.get("https://example.com/data.csv")
+result = fake.get("https://example.com/api/data")
 assert result.is_ok
-assert result.response.json() == {"col1": [1], "col2": [2]}
+assert result.response.json() == {"values": [1, 2, 3]}
 
 # Ispziona le richieste effettuate
-assert ("GET", "https://example.com/data.csv", {}) in fake.requests
+assert ("GET", "https://example.com/api/data", {}) in fake.requests
 ```
 
 `FakeHttpClient` rispecchia l'interfaccia di `HttpClient` (`.get()`, `.head()`, `.post()`,

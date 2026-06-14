@@ -32,12 +32,16 @@ Qui non stanno:
 
 | Repo | Dipende da |
 |---|---|
-| `toolkit` | `lab-connectors[http,mcp,duckdb]` |
-| `source-observatory` | `lab-connectors[http,gcs,mcp,duckdb]` |
-| `dataset-incubator` | `lab-connectors[gcs,mcp,duckdb]` |
-| `data-explorer` | `lab-connectors[duckdb,gcs]` |
-| `agent-context-builder` | `lab-connectors[http,mcp]` |
-| `lab-dashboard` | `lab-connectors` (solo path contract) |
+Il core HTTP è sempre incluso nell'installazione base. Gli extra opzionali aggiungono funzionalità specifiche.
+
+| Repo | Extra installati | Moduli usati |
+|---|---|---|
+| `toolkit` | `[mcp,duckdb]` | http, mcp, duckdb |
+| `source-observatory` | `[gcs,mcp,duckdb]` | http, gcs, mcp, duckdb |
+| `dataset-incubator` | `[gcs,mcp,duckdb]` | gcs, mcp, duckdb |
+| `data-explorer` | `[duckdb,gcs]` | duckdb, gcs (path) |
+| `agent-context-builder` | `[mcp]` | http, mcp |
+| `lab-dashboard` | — (base) | gcs (path) |
 
 Se modifichi `lab-connectors`, potresti impattare tutti questi repo.
 
