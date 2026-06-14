@@ -3,7 +3,7 @@
 Package Python condiviso per i repo del DataCivicLab.
 
 Contiene infrastruttura riusata da piu repo: HTTP client, MCP server core,
-client GCS e context manager DuckDB.
+client GCS, path contract GCS, context manager DuckDB e utility per test.
 
 ---
 
@@ -29,6 +29,52 @@ assert result.ssl_fallback_used is None  # SSL primario ok
 result = client.post("https://example.com/download", data={"id": "123"})
 result = client.post("https://example.com/api", json={"query": "..."})
 ```
+
+#### `HttpClient` — parametri principali
+
+| Parametro | Default | Descrizione |
+|---|---|---|
+| `timeout` | `(10, 30)` | Timeout connect/read in secondi |
+| `max_retries` | `3` | Tentativi massimi (incluso il primo) |
+| `retry_backoff` | `1.0` | Base backoff esponenziale in secondi |
+| `retry_jitter` | `0.0` | Jitter casuale (secondi) per evitare thundering herd |
+| `circuit_threshold` | `0` | Errori consecutivi per aprire il circuit breaker (0 = disabilitato) |
+| `user_agent` | `DataCivicLab-HttpClient/...` | User-Agent per le richieste |
+
+#### `GenericPool` — thread pool per richieste parallele
+
+Wrapper su `concurrent.futures.ThreadPoolExecutor` per eseguire richieste HTTP in parallelo.
+
+```python
+from lab_connectors.http import GenericPool, HttpResult
+
+pool = GenericPool(max_workers=5)
+results: list[HttpResult] = pool.run(
+    [(client.get, {"url": f"https://example.com/page/{i}"}) for i in range(20)]
+)
+```
+
+#### Client SPARQL
+
+Esecuzione di query SPARQL su endpoint HTTPS, con paginazione automatica e fetch CSV.
+
+```python
+from lab_connectors.http.sparql import execute_sparql, discover_graphs
+
+results = execute_sparql(
+    "https://semantic.istat.it/sparql",
+    "SELECT * WHERE { ?s ?p ?o } LIMIT 10",
+)
+graphs = discover_graphs("https://semantic.istat.it/sparql")
+```
+
+#### Tipi di ritorno
+
+| Tipo | Descrizione |
+|---|---|
+| `HttpResult` | Risultato HTTP: `response`, `err`, `is_ok`, `ssl_fallback_used`, `elapsed_ms` |
+| `HttpFallbackError` | Wrapper per errori durante retry/fallback |
+| `CircuitOpenError` | Sollevato se il circuit breaker è aperto (troppi errori consecutivi) |
 
 ---
 
@@ -128,17 +174,25 @@ Client GCS unificato per operazioni di list, upload e verifica. Supporta 3 modal
 - `auth=True`: richiede SDK autenticato, fallisce con `RuntimeError` se non disponibile
 - `auth=False`: solo HTTP API, nessuna dipendenza SDK
 
+#### GCS client API
+
 ```python
-from lab_connectors.gcs import list_objects, object_exists, upload_file
+from lab_connectors.gcs import list_objects, object_exists, upload_file, upload_string, check_public
 
 # List public bucket (HTTP API)
 results = list_objects("dataciviclab-clean", prefix="ispra/", auth=False)
 
-# Check if object exists (HEAD)
+# Check if object exists (HEAD, no SDK needed)
 exists = object_exists("dataciviclab-clean", "ispra_ru_base/2024/file.parquet")
 
-# Upload (requires auth)
+# Upload file (requires auth)
 upload_file("/tmp/file.parquet", "dataciviclab-clean", "slug/2024/file.parquet")
+
+# Upload string content (requires auth)
+upload_string('{"key": "value"}', "dataciviclab-clean", "slug/2024/manifest.json")
+
+# Verify public reachability (HEAD + Range fallback)
+ok = check_public("dataciviclab-clean", "slug/2024/file.parquet")
 ```
 
 #### Requisiti
@@ -147,7 +201,64 @@ upload_file("/tmp/file.parquet", "dataciviclab-clean", "slug/2024/file.parquet")
 pip install lab-connectors[gcs]
 ```
 
-La modalità `auth=False` e `object_exists()` non richiedono il SDK — funzionano con sole librerie stdlib.
+La modalità `auth=False`, `object_exists()` e `check_public()` non richiedono il SDK — funzionano con sole librerie stdlib.
+
+#### Path contract GCS (`lab_connectors.gcs.paths`)
+
+Il modulo `paths` definisce i **path canonici** di tutti gli artifact su GCS del DataCivicLab.
+I pattern sono caricati da `paths.json` e coprono 2 bucket e 8 pattern.
+
+**Bucket:**
+
+| Costante | Valore | Uso |
+|---|---|---|
+| `CLEAN_BUCKET` | `dataciviclab-clean` | Dati puliti (parquet, manifest) |
+| `MART_BUCKET` | `dataciviclab-mart` | Dati aggregati (mart parquet) |
+
+**Pattern canonici (tutti risolvibili con `resolve()`):**
+
+| Chiave | Pattern | Parametri |
+|---|---|---|
+| `clean_parquet` | `{slug}/{year}/{slug}_{year}_clean.parquet` | slug, year |
+| `pipeline_run` | `{slug}/{year}/pipeline_run.json` | slug, year |
+| `catalog_manifest` | `catalog/manifest.json` | — |
+| `catalog_signals` | `catalog/catalog_signals.json` | — |
+| `catalog_inventory_latest` | `catalog_inventory/catalog_inventory_latest.parquet` | — |
+| `catalog_inventory_report` | `catalog_inventory/catalog_inventory_report.json` | — |
+| `catalog_inventory_source_check` | `catalog_inventory/source-check/source_check_results.parquet` | — |
+| `mart_parquet` | `{slug}/{year}/{table}.parquet` | slug, year, table |
+
+```python
+from lab_connectors.gcs.paths import (
+    CLEAN_BUCKET, MART_BUCKET,
+    resolve, gs_url, https_url,
+    parse_gs_url, glob_to_regex,
+    pipeline_run, catalog_manifest, mart_parquet,
+)
+
+# Risolvere path relativi
+path = resolve("clean_parquet", slug="ispra_ru_base", year=2024)
+# → "ispra_ru_base/2024/ispra_ru_base_2024_clean.parquet"
+
+# URL GCS
+gs = gs_url(CLEAN_BUCKET, "ispra_ru_base/2024/data.parquet")
+# → "gs://dataciviclab-clean/ispra_ru_base/2024/data.parquet"
+
+# URL HTTPS pubblico
+https = https_url(CLEAN_BUCKET, "ispra_ru_base/2024/data.parquet")
+# → "https://storage.googleapis.com/dataciviclab-clean/ispra_ru_base/2024/data.parquet"
+
+# Parsing e pattern matching
+bucket, path = parse_gs_url("gs://dataciviclab-clean/slug/file.parquet")
+matched = glob_to_regex("dataciviclab-clean", "*/2024/*.parquet")
+
+# Convenience function per pattern specifici
+run = pipeline_run(slug="ispra_ru_base", year=2024)
+# → GcsPath con bucket, path, gs_url, https_url
+
+manifest = catalog_manifest()
+parquet = mart_parquet(slug="demo", year=2024, table="summary")
+```
 
 ---
 
@@ -163,11 +274,100 @@ with safe_connect(":memory:") as con:
     result = con.execute("SELECT 1 AS x").fetchall()
 ```
 
+#### `safe_connect()` — connessione generica
+
+Imposta automaticamente `memory_limit='2GB'` e `PRAGMA disable_progress_bar`.
+Supporta estensioni (`httpfs`, `spatial`, ...) e configurazioni custom.
+
+```python
+with safe_connect("path/to/db.duckdb", extensions=["httpfs", "spatial"]) as con:
+    con.execute("SELECT * FROM spatial_table")
+```
+
+#### `gcs_connect()` — connessione ottimizzata per GCS
+
+Wrapper che configura DuckDB per leggere parquet direttamente da GCS
+via S3 API gateway (estensione `httpfs` + `GCS_S3_CONFIG`).
+
+```python
+from lab_connectors.duckdb import gcs_connect
+
+with gcs_connect("s3://dataciviclab-clean/slug/2024/file.parquet") as con:
+    result = con.execute("SELECT count(*) FROM read_parquet(?)", ["s3://..."]).fetchone()
+```
+
+#### `GCS_S3_CONFIG`
+
+Dict di configurazione DuckDB per l'interfaccia S3-compatible di GCS.
+Utile se devi configurare DuckDB manualmente:
+
+```python
+from lab_connectors.duckdb import GCS_S3_CONFIG
+
+with safe_connect(extensions=["httpfs"], config=GCS_S3_CONFIG) as con:
+    con.execute("SELECT * FROM read_parquet('s3://bucket/file.parquet')")
+```
+
 #### Requisiti
 
 ```bash
 pip install lab-connectors[duckdb]
 ```
+
+---
+
+### `lab_connectors.testing`
+
+Fake HTTP client e utility per test. Sostituisce le chiamate HTTP reali con risposte pre-configurate,
+senza monkeypatch o mock artigianali.
+
+```python
+from lab_connectors.testing import FakeHttpClient, fake_response
+from lab_connectors.http import HttpResult
+
+fake = FakeHttpClient()
+
+# Registra risposta per URL specifico
+fake.responses["https://example.com/data.csv"] = HttpResult(
+    response=fake_response(200, "col1,col2\n1,2"),
+    err=None,
+)
+
+# Usa il client normalmente — nessuna HTTP reale
+result = fake.get("https://example.com/data.csv")
+assert result.is_ok
+assert result.response.json() == {"col1": [1], "col2": [2]}
+
+# Ispziona le richieste effettuate
+assert ("GET", "https://example.com/data.csv", {}) in fake.requests
+```
+
+`FakeHttpClient` rispecchia l'interfaccia di `HttpClient` (`.get()`, `.head()`, `.post()`,
+`.close()`, context manager) ma non fa rete. Le risposte possono essere valori fissi
+o callable `(url, **kwargs) -> HttpResult` per comportamenti dinamici.
+
+#### `fake_response()` — factory per stub `requests.Response`
+
+```python
+resp = fake_response(
+    status_code=200,
+    text='{"ok": true}',
+    json_data={"ok": True},       # evita re-parsing JSON
+    headers={"Content-Type": "application/json"},
+)
+# .status_code, .text, .content, .json(), .ok, .headers, .raise_for_status()
+# .close() e .iter_content() per compatibilità streaming
+```
+
+#### `audit-test-markers` — CLI per audit marker pytest
+
+```bash
+pip install lab-connectors[dev]  # include dipendenze audit
+audit-test-markers tests/
+```
+
+Analizza i marcatori pytest nei file di test e verifica la copertura
+dei marker obbligatori (`pure_unit`, `contract`, `adapter`, `policy`, ecc.).
 
 ---
 
@@ -182,6 +382,12 @@ pip install lab-connectors[mcp]
 
 # Con DuckDB safe_connect
 pip install lab-connectors[duckdb]
+
+# Con GCS
+pip install lab-connectors[gcs]
+
+# Con testing utilities
+pip install lab-connectors[dev]
 
 # Sviluppo locale (tutto)
 pip install -e ".[dev,mcp,gcs,duckdb]"
