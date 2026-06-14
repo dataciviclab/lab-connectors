@@ -18,7 +18,7 @@ Closes #
 
 ## Impatto su consumer downstream
 
-lab-connectors è usato da: toolkit, data-explorer, source-observatory, agent-context-builder.
+lab-connectors è usato da: toolkit, source-observatory, dataset-incubator, data-explorer, agent-context-builder, lab-dashboard.
 
 - [ ] Nessun impatto su interfacce pubbliche
 - [ ] Modifica interfaccia pubblica → **consumer aggiornati** nei repo che dipendono dal modulo

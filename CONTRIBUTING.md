@@ -12,10 +12,12 @@ da più repo del DataCivicLab.
 
 Qui stanno:
 
-- `lab_connectors/http/` — HTTP client con SSL fallback, retry e timeout
-- `lab_connectors/mcp/` — MCP server core: `create_mcp_server()`, `guard()`, `McpError`, `TtlCache`
-- `lab_connectors/gcs/` — client GCS unificato (list, upload, object_exists)
-- `lab_connectors/duckdb/` — context manager `safe_connect()` per DuckDB
+- `lab_connectors/http/` — HTTP client con SSL fallback, retry, timeout, SPARQL client e thread pool parallelo
+- `lab_connectors/mcp/` — MCP server core: `create_mcp_server()`, `guard()`, `McpError`, `TtlCache`, `McpLogger`
+- `lab_connectors/gcs/` — client GCS unificato (list, upload, object_exists, check_public)
+- `lab_connectors/gcs/paths.py` — path contract canonico GCS (bucket, pattern, resolve, URL)
+- `lab_connectors/duckdb/` — context manager `safe_connect()` e `gcs_connect()` per DuckDB
+- `lab_connectors/testing/` — `FakeHttpClient` e `audit-test-markers` CLI per test
 
 Qui non stanno:
 
@@ -28,12 +30,16 @@ Qui non stanno:
 
 `lab-connectors` è una dipendenza pip degli altri repo del Lab:
 
-| Repo | Dipende da |
-|---|---|
-| `toolkit` | `lab-connectors[http,gcs,mcp]` |
-| `data-explorer` | `lab-connectors[http,gcs]` |
-| `agent-context-builder` | `lab-connectors[mcp]` |
-| `source-observatory` | `lab-connectors[http,gcs,mcp]` |
+Gli extra dichiarati nei manifest dei repo downstream (quando presenti) attivano dipendenze opzionali di lab-connectors.
+
+| Repo | Extra dichiarati | Moduli lab-connectors usati |
+|---|---|---|
+| `toolkit` | `[duckdb]` | http, mcp, duckdb |
+| `source-observatory` | `[duckdb,gcs]` | http, gcs, mcp, duckdb |
+| `dataset-incubator` | `[duckdb,gcs]` | http, gcs, mcp, duckdb |
+| `data-explorer` | — (base) | duckdb, gcs (path) |
+| `agent-context-builder` | — (base) | http, mcp |
+| `lab-dashboard` | — (base) | gcs (path) |
 
 Se modifichi `lab-connectors`, potresti impattare tutti questi repo.
 
@@ -53,13 +59,14 @@ mypy lab_connectors/
 
 I test sono organizzati per modulo:
 
-| Directory | Cosa testa |
+| Directory / File | Cosa testa |
 |---|---|
-| `tests/http/` | HTTP client |
-| `tests/mcp/` | MCP core: guard, errori, cache |
-| `tests/test_duckdb.py` | DuckDB safe_connect |
-| `tests/test_gcs_paths.py` | Path contract GCS |
-| `tests/test_gcs.py` | GCS client |
+| `tests/http/` | HTTP client (client, backoff, pool, SPARQL, FakeHttpClient) |
+| `tests/mcp/` | MCP core: guard, errori, cache, logging |
+| `tests/test_duckdb.py` | DuckDB safe_connect, gcs_connect |
+| `tests/test_gcs_paths.py` | Path contract GCS (`paths.json`, resolve, gs_url, parse_gs_url) |
+| `tests/test_gcs.py` | GCS client (list, upload, object_exists, check_public) |
+| `tests/test_audit_markers.py` | Audit marker CLI (`audit-test-markers`) |
 
 ## Installazione parziale
 
@@ -77,6 +84,12 @@ pip install lab-connectors[duckdb]
 
 # Con GCS
 pip install lab-connectors[gcs]
+
+# Con testing utilities (FakeHttpClient, audit CLI — già nel base install)
+pip install lab-connectors
+
+# Sviluppo locale (tutto)
+pip install -e ".[dev,mcp,gcs,duckdb]"
 ```
 
 ## Quando aprire una issue
@@ -105,7 +118,9 @@ Discussion in `dataciviclab`.
 
 - [README.md](README.md) — documentazione completa dei moduli
 - [pyproject.toml](pyproject.toml) — dipendenze e configurazione package
-- [`toolkit`](https://github.com/dataciviclab/toolkit) — consumer principale
-- [`agent-context-builder`](https://github.com/dataciviclab/agent-context-builder) — consumer MCP
-- [`data-explorer`](https://github.com/dataciviclab/data-explorer) — consumer GCS
+- [`toolkit`](https://github.com/dataciviclab/toolkit) — consumer HTTP, MCP, DuckDB
+- [`source-observatory`](https://github.com/dataciviclab/source-observatory) — consumer HTTP, GCS, MCP, DuckDB
+- [`dataset-incubator`](https://github.com/dataciviclab/dataset-incubator) — consumer GCS, MCP, DuckDB
+- [`data-explorer`](https://github.com/dataciviclab/data-explorer) — consumer DuckDB, GCS path
+- [`agent-context-builder`](https://github.com/dataciviclab/agent-context-builder) — consumer HTTP, MCP
 - [`.github`](https://github.com/dataciviclab/.github) — policy condivise
