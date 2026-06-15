@@ -1,3 +1,8 @@
+"""MCP server per GitHub Discussions via GraphQL API.
+
+Espone tool per leggere, cercare, creare discussion e commenti.
+"""
+
 from __future__ import annotations
 
 import sys
@@ -65,6 +70,7 @@ def github_list_discussions(
     after: str | None = None,
     before: str | None = None,
 ) -> dict[str, Any]:
+    """Elenca le discussioni di un repo con paginazione cursor."""
     return guard_timed(
         list_discussions_impl,
         "github_list_discussions",
@@ -88,6 +94,7 @@ def github_list_discussions(
 def github_get_discussion(
     repo_full_name: str, number: int, mode: str = "full", excerpt_chars: int = 500
 ) -> dict[str, Any]:
+    """Restituisce una discussion con body intero o riepilogo."""
     return guard_timed(
         get_discussion_impl,
         "github_get_discussion",
@@ -106,6 +113,7 @@ def github_get_discussion(
 def github_get_discussion_summary(
     repo_full_name: str, number: int, excerpt_chars: int = 280
 ) -> dict[str, Any]:
+    """Restituisce un estratto corto di una discussion."""
     return guard_timed(
         get_discussion_summary_impl,
         "github_get_discussion_summary",
@@ -131,6 +139,7 @@ def github_get_discussion_comments(
     mode: str = "full",
     excerpt_chars: int = 200,
 ) -> dict[str, Any]:
+    """Restituisce commenti e reply annidate di una discussion."""
     return guard_timed(
         get_discussion_comments_impl,
         "github_get_discussion_comments",
@@ -151,6 +160,7 @@ def github_get_discussion_comments(
     structured_output=True,
 )
 def github_search_discussions(repo_full_name: str, query: str, limit: int = 10) -> dict[str, Any]:
+    """Cerca discussion per testo libero su titolo, body e commenti."""
     return guard_timed(
         search_discussions_impl,
         "github_search_discussions",
@@ -168,6 +178,7 @@ def github_search_discussions(repo_full_name: str, query: str, limit: int = 10) 
 def github_create_discussion(
     repo_full_name: str, category_name: str, title: str, body: str
 ) -> dict[str, Any]:
+    """Crea una nuova discussion in una categoria."""
     return guard_timed(
         create_discussion_impl,
         "github_create_discussion",
@@ -184,6 +195,7 @@ def github_create_discussion(
     structured_output=True,
 )
 def github_add_discussion_comment(repo_full_name: str, number: int, body: str) -> dict[str, Any]:
+    """Aggiunge un commento top-level a una discussion."""
     return guard_timed(
         add_discussion_comment_impl,
         "github_add_discussion_comment",
