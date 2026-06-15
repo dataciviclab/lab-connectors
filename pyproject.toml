@@ -41,6 +41,10 @@ dev = [
     "types-requests>=2.31.0.0",
 ]
 
+[tool.setuptools.packages.find]
+include = ["lab_connectors", "lab_connectors.*"]
+exclude = ["mcp_servers", "mcp_servers.*"]
+
 [tool.setuptools.package-data]
 "lab_connectors.gcs" = ["paths.json"]
 
