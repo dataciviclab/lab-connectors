@@ -74,7 +74,7 @@ def create_mcp_server(
 Fn = Callable[..., Any]
 
 
-def guard(fn: Fn, *args: Any, **kwargs: Any) -> dict[str, Any]:
+def guard(fn: Fn, *args: Any, **kwargs: Any) -> Any:
     """Avvolge una chiamata con try/except per tool MCP.
 
     Cattura ``McpError`` → restituisce ``{"error": code, "message": ...}``.
@@ -87,12 +87,12 @@ def guard(fn: Fn, *args: Any, **kwargs: Any) -> dict[str, Any]:
             return guard(_implementation, x)
 
     Returns:
-        Dict con risultato in caso di successo, o dict con ``error``/``message``.
+        Il risultato di *fn* (dict, list, str...) — FastMCP serializza
+        automaticamente. In caso di errore, dict con ``error``/``message``.
 
     """
     try:
-        result = fn(*args, **kwargs)
-        return result if isinstance(result, dict) else {"result": result}
+        return fn(*args, **kwargs)
     except McpError as exc:
         return exc.to_dict()
     except Exception as exc:
@@ -123,7 +123,7 @@ def guard_timed(
     logger_name: str | None = None,
     slow_ms: int = DEFAULT_SLOW_MS,
     **kwargs: Any,
-) -> dict[str, Any]:
+) -> Any:
     """Come ``guard()`` ma con logging strutturato della durata.
 
     Logger e metriche di performance per ogni tool MCP.
@@ -153,7 +153,7 @@ def guard_timed(
         result = fn(*args, **kwargs)
         elapsed = round((time.monotonic() - start) * 1000)
         _log_ok(logger, tool_name, elapsed, slow_ms)
-        return result if isinstance(result, dict) else {"result": result}
+        return result
     except McpError as exc:
         elapsed = round((time.monotonic() - start) * 1000)
         logger.warning(
