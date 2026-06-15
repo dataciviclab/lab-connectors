@@ -41,9 +41,9 @@ class TestGuard:
         result = guard(lambda: {"ok": True})
         assert result == {"ok": True}
 
-    def test_guard_wraps_non_dict_result(self) -> None:
+    def test_guard_passes_non_dict_result(self) -> None:
         result = guard(lambda: "string_result")
-        assert result == {"result": "string_result"}
+        assert result == "string_result"  # non wrappa più in {"result": ...}
 
     def test_guard_catches_mcp_error(self) -> None:
         def _fail() -> None:
