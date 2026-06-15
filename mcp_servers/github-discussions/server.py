@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from lab_connectors.mcp import create_mcp_server, guard_timed
 
 THIS_DIR = Path(__file__).resolve().parent
 if str(THIS_DIR) not in sys.path:
@@ -12,43 +12,16 @@ if str(THIS_DIR) not in sys.path:
 
 # ruff: noqa: E402
 from github_discussions_client import (
-    GitHubDiscussionsClientError,
-)
-from github_discussions_client import (
     add_discussion_comment as add_discussion_comment_impl,
-)
-from github_discussions_client import (
     create_discussion as create_discussion_impl,
-)
-from github_discussions_client import (
     get_discussion as get_discussion_impl,
-)
-from github_discussions_client import (
     get_discussion_comments as get_discussion_comments_impl,
-)
-from github_discussions_client import (
     get_discussion_summary as get_discussion_summary_impl,
-)
-from github_discussions_client import (
     list_discussions as list_discussions_impl,
-)
-from github_discussions_client import (
     search_discussions as search_discussions_impl,
 )
 
-try:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "_local" / "mcp"))
-    from mcp_telemetry import mcp_telemetry
-except Exception:
-
-    def mcp_telemetry(_connector_name: str):
-        def decorator(fn):
-            return fn
-
-        return decorator
-
-
-mcp = FastMCP(
+mcp = create_mcp_server(
     name="github-discussions",
     instructions=(
         "Connector MCP per GitHub Discussions via GraphQL. "
@@ -59,12 +32,7 @@ mcp = FastMCP(
     ),
 )
 
-
-def _guard(fn, *args, **kwargs) -> dict[str, Any]:
-    try:
-        return fn(*args, **kwargs)
-    except GitHubDiscussionsClientError as exc:
-        return {"error": str(exc)}
+SERVER_NAME = "github-discussions"
 
 
 @mcp.tool(
@@ -78,7 +46,6 @@ def _guard(fn, *args, **kwargs) -> dict[str, Any]:
     ),
     structured_output=True,
 )
-@mcp_telemetry("github-discussions")
 def github_list_discussions(
     repo_full_name: str,
     category_name: str | None = None,
@@ -86,7 +53,16 @@ def github_list_discussions(
     after: str | None = None,
     before: str | None = None,
 ) -> dict[str, Any]:
-    return _guard(list_discussions_impl, repo_full_name, category_name, limit, after, before)
+    return guard_timed(
+        list_discussions_impl,
+        "github_list_discussions",
+        repo_full_name,
+        category_name,
+        limit,
+        after,
+        before,
+        logger_name=SERVER_NAME,
+    )
 
 
 @mcp.tool(
@@ -97,22 +73,35 @@ def github_list_discussions(
     ),
     structured_output=True,
 )
-@mcp_telemetry("github-discussions")
 def github_get_discussion(
     repo_full_name: str, number: int, mode: str = "full", excerpt_chars: int = 500
 ) -> dict[str, Any]:
-    return _guard(get_discussion_impl, repo_full_name, number, mode, excerpt_chars)
+    return guard_timed(
+        get_discussion_impl,
+        "github_get_discussion",
+        repo_full_name,
+        number,
+        mode,
+        excerpt_chars,
+        logger_name=SERVER_NAME,
+    )
 
 
 @mcp.tool(
     description="Restituisce un riepilogo corto di una GitHub Discussion.",
     structured_output=True,
 )
-@mcp_telemetry("github-discussions")
 def github_get_discussion_summary(
     repo_full_name: str, number: int, excerpt_chars: int = 280
 ) -> dict[str, Any]:
-    return _guard(get_discussion_summary_impl, repo_full_name, number, excerpt_chars)
+    return guard_timed(
+        get_discussion_summary_impl,
+        "github_get_discussion_summary",
+        repo_full_name,
+        number,
+        excerpt_chars,
+        logger_name=SERVER_NAME,
+    )
 
 
 @mcp.tool(
@@ -123,7 +112,6 @@ def github_get_discussion_summary(
     ),
     structured_output=True,
 )
-@mcp_telemetry("github-discussions")
 def github_get_discussion_comments(
     repo_full_name: str,
     number: int,
@@ -131,7 +119,16 @@ def github_get_discussion_comments(
     mode: str = "full",
     excerpt_chars: int = 200,
 ) -> dict[str, Any]:
-    return _guard(get_discussion_comments_impl, repo_full_name, number, limit, mode, excerpt_chars)
+    return guard_timed(
+        get_discussion_comments_impl,
+        "github_get_discussion_comments",
+        repo_full_name,
+        number,
+        limit,
+        mode,
+        excerpt_chars,
+        logger_name=SERVER_NAME,
+    )
 
 
 @mcp.tool(
@@ -141,29 +138,52 @@ def github_get_discussion_comments(
     ),
     structured_output=True,
 )
-@mcp_telemetry("github-discussions")
-def github_search_discussions(repo_full_name: str, query: str, limit: int = 10) -> dict[str, Any]:
-    return _guard(search_discussions_impl, repo_full_name, query, limit)
+def github_search_discussions(
+    repo_full_name: str, query: str, limit: int = 10
+) -> dict[str, Any]:
+    return guard_timed(
+        search_discussions_impl,
+        "github_search_discussions",
+        repo_full_name,
+        query,
+        limit,
+        logger_name=SERVER_NAME,
+    )
 
 
 @mcp.tool(
     description="Crea una GitHub Discussion in una categoria del repository.",
     structured_output=True,
 )
-@mcp_telemetry("github-discussions")
 def github_create_discussion(
     repo_full_name: str, category_name: str, title: str, body: str
 ) -> dict[str, Any]:
-    return _guard(create_discussion_impl, repo_full_name, category_name, title, body)
+    return guard_timed(
+        create_discussion_impl,
+        "github_create_discussion",
+        repo_full_name,
+        category_name,
+        title,
+        body,
+        logger_name=SERVER_NAME,
+    )
 
 
 @mcp.tool(
     description="Aggiunge un commento top-level a una GitHub Discussion.",
     structured_output=True,
 )
-@mcp_telemetry("github-discussions")
-def github_add_discussion_comment(repo_full_name: str, number: int, body: str) -> dict[str, Any]:
-    return _guard(add_discussion_comment_impl, repo_full_name, number, body)
+def github_add_discussion_comment(
+    repo_full_name: str, number: int, body: str
+) -> dict[str, Any]:
+    return guard_timed(
+        add_discussion_comment_impl,
+        "github_add_discussion_comment",
+        repo_full_name,
+        number,
+        body,
+        logger_name=SERVER_NAME,
+    )
 
 
 if __name__ == "__main__":

@@ -7,10 +7,20 @@ Smoke test sulla registrazione tool FastMCP.
 from __future__ import annotations
 
 import asyncio
+import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
-from github_discussions_client import (
+
+# Add server dir to path so imports from server + client work
+SERVER_DIR = (
+    Path(__file__).resolve().parents[2] / "mcp_servers" / "github-discussions"
+)
+if str(SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(SERVER_DIR))
+
+from github_discussions_client import (  # noqa: E402
     _GITHUB_TOKEN_ENV_VARS,
     GitHubDiscussionsClientError,
     _get_token,
@@ -22,7 +32,7 @@ from github_discussions_client import (
     list_discussions,
     search_discussions,
 )
-from server import mcp
+from server import mcp  # noqa: E402
 
 # ── fixtures ──────────────────────────────────────────────────────────
 
