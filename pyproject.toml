@@ -22,7 +22,9 @@ lab-connectors-audit = "lab_connectors.testing.audit_contract:main"
 
 [project.optional-dependencies]
 mcp = [
-    "mcp>=1.0.0",
+    "mcp>=1.13,<2",
+    "httpx>=0.28,<1",
+    "python-dotenv>=1,<2",
 ]
 gcs = [
     "google-cloud-storage>=2.19.0",
