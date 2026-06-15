@@ -13,11 +13,23 @@ if str(THIS_DIR) not in sys.path:
 # ruff: noqa: E402
 from github_discussions_client import (
     add_discussion_comment as add_discussion_comment_impl,
+)
+from github_discussions_client import (
     create_discussion as create_discussion_impl,
+)
+from github_discussions_client import (
     get_discussion as get_discussion_impl,
+)
+from github_discussions_client import (
     get_discussion_comments as get_discussion_comments_impl,
+)
+from github_discussions_client import (
     get_discussion_summary as get_discussion_summary_impl,
+)
+from github_discussions_client import (
     list_discussions as list_discussions_impl,
+)
+from github_discussions_client import (
     search_discussions as search_discussions_impl,
 )
 
@@ -138,9 +150,7 @@ def github_get_discussion_comments(
     ),
     structured_output=True,
 )
-def github_search_discussions(
-    repo_full_name: str, query: str, limit: int = 10
-) -> dict[str, Any]:
+def github_search_discussions(repo_full_name: str, query: str, limit: int = 10) -> dict[str, Any]:
     return guard_timed(
         search_discussions_impl,
         "github_search_discussions",
@@ -173,9 +183,7 @@ def github_create_discussion(
     description="Aggiunge un commento top-level a una GitHub Discussion.",
     structured_output=True,
 )
-def github_add_discussion_comment(
-    repo_full_name: str, number: int, body: str
-) -> dict[str, Any]:
+def github_add_discussion_comment(repo_full_name: str, number: int, body: str) -> dict[str, Any]:
     return guard_timed(
         add_discussion_comment_impl,
         "github_add_discussion_comment",

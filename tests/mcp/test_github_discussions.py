@@ -14,9 +14,7 @@ from typing import Any
 import pytest
 
 # Add server dir to path so imports from server + client work
-SERVER_DIR = (
-    Path(__file__).resolve().parents[2] / "mcp_servers" / "github-discussions"
-)
+SERVER_DIR = Path(__file__).resolve().parents[2] / "mcp_servers" / "github-discussions"
 if str(SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(SERVER_DIR))
 
