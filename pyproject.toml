@@ -18,7 +18,6 @@ dependencies = [
 
 [project.scripts]
 audit-test-markers = "lab_connectors.testing.audit_markers:main"
-lab-connectors-audit = "lab_connectors.testing.audit_contract:main"
 
 [project.optional-dependencies]
 mcp = [

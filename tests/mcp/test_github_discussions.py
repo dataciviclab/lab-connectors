@@ -116,33 +116,39 @@ def mock_graphql(monkeypatch):
 # ── _get_token ─────────────────────────────────────────────────────────
 
 
+@pytest.mark.pure_unit
 class TestGetToken:
     """Test fallback chain del token."""
 
+    @pytest.mark.pure_unit
     def test_first_var_used(self, monkeypatch):
         for var in _GITHUB_TOKEN_ENV_VARS:
             monkeypatch.delenv(var, raising=False)
         monkeypatch.setenv(_GITHUB_TOKEN_ENV_VARS[0], "token-a")
         assert _get_token() == "token-a"
 
+    @pytest.mark.pure_unit
     def test_second_var_fallback(self, monkeypatch):
         for var in _GITHUB_TOKEN_ENV_VARS:
             monkeypatch.delenv(var, raising=False)
         monkeypatch.setenv(_GITHUB_TOKEN_ENV_VARS[1], "token-b")
         assert _get_token() == "token-b"
 
+    @pytest.mark.pure_unit
     def test_third_var_fallback(self, monkeypatch):
         for var in _GITHUB_TOKEN_ENV_VARS:
             monkeypatch.delenv(var, raising=False)
         monkeypatch.setenv(_GITHUB_TOKEN_ENV_VARS[2], "token-c")
         assert _get_token() == "token-c"
 
+    @pytest.mark.pure_unit
     def test_raises_when_missing(self, monkeypatch):
         for var in _GITHUB_TOKEN_ENV_VARS:
             monkeypatch.delenv(var, raising=False)
         with pytest.raises(GitHubDiscussionsClientError, match="Nessun token"):
             _get_token()
 
+    @pytest.mark.pure_unit
     def test_precedence_order(self, monkeypatch):
         """Se tutti e tre presenti, prende il primo."""
         for var in _GITHUB_TOKEN_ENV_VARS:
@@ -153,21 +159,27 @@ class TestGetToken:
 # ── _split_repo ────────────────────────────────────────────────────────
 
 
+@pytest.mark.pure_unit
 class TestSplitRepo:
+    @pytest.mark.pure_unit
     def test_valid(self):
         assert _split_repo("owner/repo") == ("owner", "repo")
 
+    @pytest.mark.pure_unit
     def test_valid_with_spaces(self):
         assert _split_repo("  owner/repo  ") == ("owner", "repo")
 
+    @pytest.mark.pure_unit
     def test_invalid_no_slash(self):
         with pytest.raises(GitHubDiscussionsClientError, match="owner/repo"):
             _split_repo("justrepo")
 
+    @pytest.mark.pure_unit
     def test_invalid_empty_owner(self):
         with pytest.raises(GitHubDiscussionsClientError, match="owner/repo"):
             _split_repo("/repo")
 
+    @pytest.mark.pure_unit
     def test_invalid_empty_repo(self):
         with pytest.raises(GitHubDiscussionsClientError, match="owner/repo"):
             _split_repo("owner/")
@@ -176,9 +188,11 @@ class TestSplitRepo:
 # ── list_discussions ───────────────────────────────────────────────────
 
 
+@pytest.mark.adapter
 class TestListDiscussions:
     """Test per list_discussions con _graphql mockato."""
 
+    @pytest.mark.adapter
     def test_forward_no_cursor(self, mock_graphql):
         calls, resp = mock_graphql
         resp["data"] = _FAKE_LIST_RESPONSE["data"]
@@ -199,6 +213,7 @@ class TestListDiscussions:
         assert "before" not in vars_ or vars_.get("before") is None
         assert "limit" in vars_
 
+    @pytest.mark.adapter
     def test_forward_with_after_cursor(self, mock_graphql):
         calls, resp = mock_graphql
         resp["data"] = _FAKE_LIST_RESPONSE["data"]
@@ -211,6 +226,7 @@ class TestListDiscussions:
         # La query non deve contenere il valore interpolato
         assert 'after:"Y3Vyc29yOnYyOpHOA2"' not in calls[0]["query"]
 
+    @pytest.mark.adapter
     def test_backward_with_before_cursor(self, mock_graphql):
         calls, resp = mock_graphql
         resp["data"] = _FAKE_LIST_RESPONSE["data"]
@@ -223,6 +239,7 @@ class TestListDiscussions:
         assert "last:" in calls[0]["query"]
         assert "first:" not in calls[0]["query"]
 
+    @pytest.mark.adapter
     def test_category_filter_after_pagination(self, mock_graphql):
         """category_name filtra lato client dopo paginazione GitHub.
 
@@ -258,6 +275,7 @@ class TestListDiscussions:
         assert result["discussions"][0]["closed"] is True
         assert result["discussions"][1]["closed"] is False
 
+    @pytest.mark.adapter
     def test_empty_response(self, mock_graphql):
         calls, resp = mock_graphql
         resp["data"] = {
@@ -268,6 +286,7 @@ class TestListDiscussions:
         assert result["discussion_count"] == 0
         assert result["discussions"] == []
 
+    @pytest.mark.adapter
     def test_error_from_graphql(self, mock_graphql):
         calls, resp = mock_graphql
         resp["error"] = "NOT_FOUND"
@@ -279,7 +298,9 @@ class TestListDiscussions:
 # ── search_discussions ─────────────────────────────────────────────────
 
 
+@pytest.mark.adapter
 class TestSearchDiscussions:
+    @pytest.mark.adapter
     def test_search_returns_results(self, mock_graphql):
         calls, resp = mock_graphql
         resp["data"] = _FAKE_SEARCH_RESPONSE["data"]
@@ -296,14 +317,17 @@ class TestSearchDiscussions:
         # Verifica scope al repository
         assert "repo:owner/repo" in calls[0]["variables"]["query"]
 
+    @pytest.mark.adapter
     def test_empty_query_raises(self, mock_graphql):
         with pytest.raises(GitHubDiscussionsClientError, match="vuota"):
             search_discussions("owner/repo", "")
 
+    @pytest.mark.adapter
     def test_blank_query_raises(self, mock_graphql):
         with pytest.raises(GitHubDiscussionsClientError, match="vuota"):
             search_discussions("owner/repo", "   ")
 
+    @pytest.mark.adapter
     def test_search_limit(self, mock_graphql):
         calls, resp = mock_graphql
         resp["data"] = {"search": {"discussionCount": 0, "nodes": []}}
@@ -311,6 +335,7 @@ class TestSearchDiscussions:
         search_discussions("owner/repo", "test", limit=5)
         assert calls[0]["variables"]["limit"] == 5
 
+    @pytest.mark.adapter
     def test_search_limit_clamped(self, mock_graphql):
         calls, resp = mock_graphql
         resp["data"] = {"search": {"discussionCount": 0, "nodes": []}}
@@ -318,6 +343,7 @@ class TestSearchDiscussions:
         search_discussions("owner/repo", "test", limit=999)
         assert calls[0]["variables"]["limit"] == 50  # max cap
 
+    @pytest.mark.adapter
     def test_search_error(self, mock_graphql):
         calls, resp = mock_graphql
         resp["error"] = "RATE_LIMITED"
@@ -329,7 +355,9 @@ class TestSearchDiscussions:
 # ── get_discussion / get_discussion_comments ───────────────────────────
 
 
+@pytest.mark.adapter
 class TestGetDiscussion:
+    @pytest.mark.adapter
     def test_full_mode_returns_body(self, mock_graphql):
         calls, resp = mock_graphql
         resp["data"] = {
@@ -348,6 +376,7 @@ class TestGetDiscussion:
         assert result["closed"] is True
         assert result["closed_at"] == "2026-06-02T15:55:00Z"
 
+    @pytest.mark.adapter
     def test_summary_truncates_body(self, mock_graphql):
         calls, resp = mock_graphql
         resp["data"] = {
@@ -366,7 +395,9 @@ class TestGetDiscussion:
         assert len(result["body_excerpt"]) <= 100 + 3  # + ... troncatura
 
 
+@pytest.mark.adapter
 class TestGetDiscussionComments:
+    @pytest.mark.adapter
     def test_returns_comments(self, mock_graphql):
         calls, resp = mock_graphql
         resp["data"] = {
@@ -400,9 +431,11 @@ class TestGetDiscussionComments:
 # ── FastMCP tool registration ──────────────────────────────────────────
 
 
+@pytest.mark.contract
 class TestToolRegistration:
     """Smoke test: tutti i tool sono registrati su FastMCP."""
 
+    @pytest.mark.contract
     def test_all_tools_registered(self):
         tools = asyncio.run(mcp.list_tools())
         names = sorted(t.name for t in tools)
@@ -425,7 +458,9 @@ class TestToolRegistration:
 # ── create_discussion / add_discussion_comment ─────────────────────────
 
 
+@pytest.mark.adapter
 class TestCreateDiscussion:
+    @pytest.mark.adapter
     def test_requires_non_empty_fields(self, mock_graphql):
         with pytest.raises(GitHubDiscussionsClientError, match="vuoto"):
             create_discussion("owner/repo", "", "title", "body")
@@ -435,11 +470,14 @@ class TestCreateDiscussion:
             create_discussion("owner/repo", "cat", "title", "")
 
 
+@pytest.mark.adapter
 class TestAddComment:
+    @pytest.mark.adapter
     def test_requires_non_empty_body(self, mock_graphql):
         with pytest.raises(GitHubDiscussionsClientError, match="vuoto"):
             add_discussion_comment("owner/repo", 42, "")
 
+    @pytest.mark.adapter
     def test_requires_valid_repo(self, mock_graphql):
         with pytest.raises(GitHubDiscussionsClientError, match="owner/repo"):
             add_discussion_comment("invalid", 42, "body")

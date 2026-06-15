@@ -38,12 +38,16 @@ Il server cerca il token GitHub in quest'ordine:
 
 Il token deve avere scope sufficienti per leggere o scrivere Discussions nel repository target.
 
-## Installazione dipendenze
+## Installazione
+
+> **Nota:** Il server non è installabile via pip (non è un pacchetto Python).
+> Funziona solo da checkout del repository. Assicurati di avere il repo clonato.
+
+Dipendenze Python (richieste per il server e la libreria `lab_connectors`):
 
 ```sh
 pip install -r mcp_servers/github-discussions/requirements.txt
-# oppure via extras lab-connectors:
-pip install -e ".[mcp]"
+pip install -e ".[mcp]"    # installa lab_connectors con extras mcp
 ```
 
 ## Config MCP (opencode.json / .mcp.json)

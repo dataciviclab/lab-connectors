@@ -1,3 +1,9 @@
+"""Client GraphQL per GitHub Discussions.
+
+Fornisce funzioni pubbliche per list, search, get, create discussion e commenti.
+Usa httpx per chiamate autenticate all'API GitHub GraphQL.
+"""
+
 from __future__ import annotations
 
 import os
@@ -22,7 +28,7 @@ _GITHUB_TOKEN_ENV_VARS = [
 
 
 class GitHubDiscussionsClientError(RuntimeError):
-    pass
+    """Errore sollevato dal client per input non validi o risposte API errate."""
 
 
 def _get_token() -> str:
@@ -361,6 +367,7 @@ def list_discussions(
 def get_discussion(
     repo_full_name: str, number: int, mode: str = "full", excerpt_chars: int = 500
 ) -> dict[str, Any]:
+    """Recupera una discussion per numero con body intero o riepilogo."""
     owner, name = _split_repo(repo_full_name)
     query = """
     query($owner:String!, $name:String!, $number:Int!) {
@@ -418,6 +425,7 @@ def get_discussion(
 def get_discussion_summary(
     repo_full_name: str, number: int, excerpt_chars: int = 280
 ) -> dict[str, Any]:
+    """Restituisce un riepilogo breve di una discussion."""
     discussion = get_discussion(repo_full_name, number)
     safe_excerpt_chars = max(80, min(excerpt_chars, 600))
     return {
@@ -444,6 +452,7 @@ def get_discussion_comments(
     mode: str = "full",
     excerpt_chars: int = 200,
 ) -> dict[str, Any]:
+    """Recupera commenti e reply annidate di una discussion."""
     owner, name = _split_repo(repo_full_name)
     safe_limit = max(1, min(limit, 50))
     safe_mode = mode if mode in ("full", "summary") else "full"
@@ -499,6 +508,7 @@ def get_discussion_comments(
 def create_discussion(
     repo_full_name: str, category_name: str, title: str, body: str
 ) -> dict[str, Any]:
+    """Crea una nuova discussion in una categoria del repository."""
     if not category_name.strip():
         raise GitHubDiscussionsClientError("category_name vuoto")
     if not title.strip():
@@ -557,6 +567,7 @@ def create_discussion(
 
 
 def add_discussion_comment(repo_full_name: str, number: int, body: str) -> dict[str, Any]:
+    """Aggiunge un commento top-level a una discussion."""
     if not body.strip():
         raise GitHubDiscussionsClientError("body vuoto")
     discussion_id = _get_discussion_id(repo_full_name, number)
