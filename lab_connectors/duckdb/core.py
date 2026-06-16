@@ -11,29 +11,16 @@ Configurazioni di default applicate automaticamente (override via ``config``):
     - ``memory_limit``: ``'2GB'``
     - ``PRAGMA disable_progress_bar``: sempre attivo
 
-Estensione ``icu``: caricabile ma senza side-effect sulla collation globale.
-Chi necessita collation italiana usa ``SET default_collation='it'`` esplicitamente
-dopo la connessione, oppure ``COLLATE "it"`` nelle query.
-
 Uso::
 
-    from lab_connectors.duckdb import safe_connect, GCS_S3_CONFIG
+    from lab_connectors.duckdb import safe_connect
 
     with safe_connect() as con:
         result = con.execute("SELECT 1").fetchall()
 
-    # Estensione per GCS con config predefinita
-    with safe_connect(extensions=["httpfs"]) as con:
-        con.execute("SELECT * FROM read_parquet('s3://bucket/file.parquet')")
-
-    # Config esplicita (sovrascrive i default parzialmente)
-    with safe_connect(config=GCS_S3_CONFIG) as con:
-        con.execute("SELECT * FROM read_parquet('s3://bucket/file.parquet')")
-
-    # Collation italiana — esplicita, non automatica
-    with safe_connect(extensions=["icu"]) as con:
-        con.execute("SET default_collation='it'")
-        con.execute("SELECT * FROM read_parquet(...) ORDER BY città")
+    # HTTPS diretto su GCS (stabile, senza estensioni)
+    with gcs_connect("https://storage.googleapis.com/...") as con:
+        con.execute("SELECT * FROM read_parquet('https://...')")
 """
 
 from __future__ import annotations
@@ -44,8 +31,8 @@ from pathlib import Path
 from typing import Any
 
 # ── Configurazione DuckDB per bucket GCS pubblici via S3-compatible API ───────
-# Serve perche' DuckDB httpfs legge GCS tramite API S3, con endpoint
-# storage.googleapis.com. Senza questa config, DuckDB prova AWS S3 e fallisce 404.
+# Mantenuta per backward compat. Preferire HTTPS che non richiede httpfs
+# ed evita il bug DuckDB "Information loss on integer cast".
 
 GCS_S3_CONFIG: dict[str, str] = {
     "s3_endpoint": "storage.googleapis.com",
@@ -54,10 +41,6 @@ GCS_S3_CONFIG: dict[str, str] = {
     "s3_secret_access_key": "",
     "s3_use_ssl": "true",
 }
-
-# ── Configurazioni di default DuckDB per il Lab ──────────────────────────────
-# Applicate da safe_connect se non sovrascritte dalla config esplicita.
-# memory_limit: limite ragionevole per container/CI.
 
 _DEFAULT_CONFIG: dict[str, str] = {
     "memory_limit": "2GB",
@@ -72,37 +55,25 @@ def safe_connect(
 ) -> Generator[Any, None, None]:
     """Context manager per connessioni DuckDB.
 
-    Applica automaticamente ``_DEFAULT_CONFIG`` (``memory_limit='2GB'``)
-    e ``PRAGMA disable_progress_bar``. I valori in ``config`` sovrascrivono
-    i default.
-
-    ``INSTALL`` + ``LOAD`` per ogni estensione specificata.
-    ``INSTALL`` è idempotente — sicuro su runner con estensione già presente.
+    Applica ``_DEFAULT_CONFIG`` (``memory_limit='2GB'``)
+    e ``PRAGMA disable_progress_bar``.
 
     Args:
         database: Path al database o ``":memory:"`` (default).
-        extensions: Lista di estensioni DuckDB da installare e caricare
-                    (es. ``["httpfs"]``, ``["httpfs", "icu"]``).
-        config: Dict di configurazione DuckDB (es. ``GCS_S3_CONFIG``).
-                I valori qui sovrascrivono ``_DEFAULT_CONFIG``.
+        extensions: Lista di estensioni DuckDB (``["httpfs"]``, ``["icu"]``).
+        config: Config DuckDB (es. ``GCS_S3_CONFIG``). Sovrascrive i default.
 
     Yields:
         duckdb.DuckDBPyConnection — connessione aperta.
 
-    Raises:
-        duckdb.Error: eccezione originale DuckDB, nessun wrapping.
-
     """
-    import duckdb  # duckdb è extra opzionale [duckdb]
+    import duckdb
 
-    # Merge: default + override esplicito
     merged_config: dict[str, Any] = {**_DEFAULT_CONFIG, **(config or {})}
 
     con = duckdb.connect(database, config=merged_config)
     try:
-        # Disabilita progress bar per output pulito (CLI, MCP, test)
         con.execute("PRAGMA disable_progress_bar")
-
         if extensions:
             for ext in extensions:
                 con.execute(f"INSTALL {ext}")
@@ -115,35 +86,29 @@ def safe_connect(
             pass
 
 
-def _is_s3_path(path: str | Path) -> bool:
-    """Indica se il path inizia con ``s3://`` (GCS via DuckDB httpfs).
-
-    Rileva anche ``s3:/`` (``Path()`` normalizza ``//`` in ``/``).
-    """
-    s = str(path)
-    return s.startswith("s3://") or s.startswith("s3:/")
-
-
 @contextmanager
 def gcs_connect(
     path: str | Path,
     database: str = ":memory:",
 ) -> Generator[Any, None, None]:
-    """Context manager DuckDB per leggere parquet su GCS pubblico o locale.
+    """Context manager per leggere parquet da GCS via DuckDB.
 
-    - Se il path inizia con ``s3://``:
-      ``safe_connect(extensions=["httpfs"], config=GCS_S3_CONFIG)``
-    - Altrimenti: ``safe_connect()`` (niente httpfs, nessuna estensione)
+    DuckDB legge ``https://storage.googleapis.com/...`` nativamente
+    senza estensioni (stabile, senza bug httpfs).
+
+    Per path ``s3://...`` carica httpfs (backward compat).
 
     Args:
-        path: Path al parquet (``s3://dataciviclab-clean/...`` o locale).
+        path: Path al parquet (HTTPS preferito per stabilità).
         database: Database DuckDB (default ``:memory:``).
 
     Yields:
         duckdb.DuckDBPyConnection — connessione aperta.
 
     """
-    if _is_s3_path(path):
+    s = str(path)
+    needs_httpfs = s.startswith("s3://") or s.startswith("s3:/")
+    if needs_httpfs:
         with safe_connect(database=database, extensions=["httpfs"], config=GCS_S3_CONFIG) as con:
             yield con
     else:
