@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 # ── Lazy imports ──────────────────────────────────────────────────────────────
 # http (requests) and mcp (FastMCP SDK) are expensive to import (~3.5s each).
 # We defer them so that `import lab_connectors.duckdb` stays fast.
@@ -27,7 +29,7 @@ _LAZY_SUBMODULES: dict[str, str] = {
 }
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Resolve names lazily when first accessed (PEP 562)."""
     if name in _LAZY_SUBMODULES:
         import importlib
