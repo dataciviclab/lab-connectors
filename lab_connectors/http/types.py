@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import requests
+from typing import Any
 
 
 @dataclass
@@ -49,7 +46,7 @@ class HttpResult:
 
     """
 
-    response: requests.Response | None
+    response: Any  # requests.Response in produzione, test stub in test
     err: Exception | None
     ssl_fallback_used: bool | None = None
 
