@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from lab_connectors.http.types import HttpFallbackError, HttpResult
+from lab_connectors.testing import fake_response
 
 pytestmark = pytest.mark.pure_unit
 
@@ -29,7 +30,8 @@ class TestHttpFallbackError:
 
 class TestHttpResult:
     def test_ok_response(self) -> None:
-        result = HttpResult(response="<Response 200>", err=None)
+        resp = fake_response(200, "ok")
+        result = HttpResult(response=resp, err=None)
         assert result.is_ok is True
         assert result.is_error is False
         assert result.ssl_fallback_used is None
@@ -40,7 +42,8 @@ class TestHttpResult:
         assert result.is_error is True
 
     def test_ssl_fallback_success(self) -> None:
-        result = HttpResult(response="<Response 200>", err=None, ssl_fallback_used=True)
+        resp = fake_response(200, "ok")
+        result = HttpResult(response=resp, err=None, ssl_fallback_used=True)
         assert result.is_ok is True
         assert result.ssl_fallback_used is True
 
@@ -62,16 +65,19 @@ class TestHttpResult:
         assert result.is_ssl_fallback_failed is True
 
     def test_is_ssl_fallback_failed_false_when_ok(self) -> None:
-        result = HttpResult(response="<Response 200>", err=None, ssl_fallback_used=None)
+        resp = fake_response(200, "ok")
+        result = HttpResult(response=resp, err=None, ssl_fallback_used=None)
         assert result.is_ssl_fallback_failed is False
 
     def test_is_ssl_fallback_failed_false_when_fallback_ok(self) -> None:
-        result = HttpResult(response="<Response 200>", err=None, ssl_fallback_used=True)
+        resp = fake_response(200, "ok")
+        result = HttpResult(response=resp, err=None, ssl_fallback_used=True)
         assert result.is_ssl_fallback_failed is False
 
     def test_as_tuple(self) -> None:
-        result = HttpResult(response="<Response 200>", err=None)
-        assert result.as_tuple() == ("<Response 200>", None)
+        resp = fake_response(200, "ok")
+        result = HttpResult(response=resp, err=None)
+        assert result.as_tuple() == (resp, None)
 
     def test_as_tuple_with_error(self) -> None:
         err = RuntimeError("boom")
@@ -80,8 +86,6 @@ class TestHttpResult:
 
     def test_response_with_fake_response_stub(self) -> None:
         """HttpResult accepts fake_response() — type-checks and works at runtime."""
-        from lab_connectors.testing import fake_response
-
         resp = fake_response(200, text="ok", headers={"x-test": "1"})
         result = HttpResult(response=resp, err=None)
         assert result.is_ok is True
@@ -92,8 +96,6 @@ class TestHttpResult:
 
     def test_fake_response_with_error(self) -> None:
         """HttpResult accepts fake_response() for error status too."""
-        from lab_connectors.testing import fake_response
-
         resp = fake_response(500, text="Internal Server Error")
         result = HttpResult(response=resp, err=None)
         assert result.is_ok is True  # err is None, so is_ok is True
