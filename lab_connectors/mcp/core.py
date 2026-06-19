@@ -30,17 +30,21 @@ from typing import Any
 from lab_connectors.mcp.errors import McpError
 from lab_connectors.mcp.logging import get_mcp_logger
 
-try:
-    from mcp.server.fastmcp import FastMCP
-except ImportError:  # pragma: no cover
-    FastMCP = None  # type: ignore[assignment,misc]
+
+def _get_fastmcp() -> type | None:
+    """Lazy import of FastMCP (expensive: ~3.5s for pydantic+starlette)."""
+    try:
+        from mcp.server.fastmcp import FastMCP
+    except ImportError:
+        FastMCP = None  # type: ignore[assignment, misc]
+    return FastMCP
 
 
 def create_mcp_server(
     name: str,
     instructions: str,
     log_level: str = "INFO",
-) -> FastMCP:
+) -> Any:
     """Crea un server FastMCP standardizzato per DataCivicLab.
 
     Configura automaticamente:
@@ -60,7 +64,8 @@ def create_mcp_server(
         RuntimeError: Se ``mcp`` non è installato.
 
     """
-    if FastMCP is None:
+    fastmcp_cls = _get_fastmcp()
+    if fastmcp_cls is None:
         raise RuntimeError(
             "Il pacchetto 'mcp' non è installato. Installalo con: pip install lab-connectors[mcp]"
         )
@@ -68,7 +73,7 @@ def create_mcp_server(
     # Attiva logging strutturato
     get_mcp_logger(name, level=log_level)
 
-    return FastMCP(name=name, instructions=instructions)
+    return fastmcp_cls(name=name, instructions=instructions)
 
 
 Fn = Callable[..., Any]
