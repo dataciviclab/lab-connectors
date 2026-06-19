@@ -3,10 +3,42 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    import requests
+    pass
+
+
+class ResponseLike(Protocol):
+    """Minimal response surface condivisa tra ``requests.Response`` e test stub.
+
+    Copre gli attributi letti dai consumer di ``HttpResult``:
+    ``status_code``, ``headers``, ``text``, ``content``,
+    ``.json()``, ``.raise_for_status()``, ``ok``, ``url``, ``reason``.
+    """
+
+    status_code: int
+    headers: Any
+    url: str
+    reason: str
+
+    @property
+    def ok(self) -> bool:
+        """True if status_code is 2xx."""
+
+    @property
+    def text(self) -> str:
+        """Response body as text."""
+
+    @property
+    def content(self) -> bytes:
+        """Response body as bytes."""
+
+    def json(self) -> Any:
+        """Parse response body as JSON."""
+
+    def raise_for_status(self) -> None:
+        """Raise HTTPError if status_code >= 400."""
 
 
 @dataclass
@@ -49,7 +81,7 @@ class HttpResult:
 
     """
 
-    response: requests.Response | None
+    response: ResponseLike | None
     err: Exception | None
     ssl_fallback_used: bool | None = None
 

@@ -194,7 +194,7 @@ class _FakeResponse:
         self.headers = headers or {}
         self.ok = 200 <= status_code < 300
         self.url = ""  # set by caller if needed
-        self.reason: str | None = None
+        self.reason = ""
 
     @property
     def text(self) -> str:
