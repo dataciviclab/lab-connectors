@@ -77,3 +77,26 @@ class TestHttpResult:
         err = RuntimeError("boom")
         result = HttpResult(response=None, err=err)
         assert result.as_tuple() == (None, err)
+
+    def test_response_with_fake_response_stub(self) -> None:
+        """HttpResult accepts fake_response() — type-checks and works at runtime."""
+        from lab_connectors.testing import fake_response
+
+        resp = fake_response(200, text="ok", headers={"x-test": "1"})
+        result = HttpResult(response=resp, err=None)
+        assert result.is_ok is True
+        assert result.response is not None
+        assert result.response.status_code == 200
+        assert result.response.text == "ok"
+        assert result.response.headers["x-test"] == "1"
+
+    def test_fake_response_with_error(self) -> None:
+        """HttpResult accepts fake_response() for error status too."""
+        from lab_connectors.testing import fake_response
+
+        resp = fake_response(500, text="Internal Server Error")
+        result = HttpResult(response=resp, err=None)
+        assert result.is_ok is True  # err is None, so is_ok is True
+        assert result.response is not None
+        assert result.response.status_code == 500
+        assert result.response.ok is False
