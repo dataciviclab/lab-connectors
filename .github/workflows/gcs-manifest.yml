@@ -19,7 +19,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[gcs]"
+        run: |
+          pip install -e ".[gcs]"
+          pip install google-cloud-storage
 
       - name: Authenticate to Google Cloud
         env:
@@ -31,6 +33,7 @@ jobs:
           fi
           printf '%s\n' "$GCP_SA_KEY" > /tmp/gcp-key.json
           gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json" >> "$GITHUB_ENV"
 
       - name: Generate and upload manifest
         env:
