@@ -1,0 +1,39 @@
+name: GCS Manifest
+
+on:
+  schedule:
+    # Ogni giorno alle 6:00 UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    # Eseguibile manualmente da GitHub UI
+
+jobs:
+  scan-and-upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # per workload identity federation
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[gcs]"
+          pip install google-cloud-storage
+
+      - name: Authenticate to GCS
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCS_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCS_SERVICE_ACCOUNT }}
+
+      - name: Scan and upload manifest
+        run: python scripts/scan_gcs_manifest.py --upload
