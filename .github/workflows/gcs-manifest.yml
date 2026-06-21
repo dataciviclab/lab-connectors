@@ -1,0 +1,44 @@
+name: GCS Manifest
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  scan-and-upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[gcs]"
+
+      - name: Authenticate to Google Cloud
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          if [ -z "$GCP_SA_KEY" ]; then
+            echo "⚠️  GCP_SA_KEY non configurato — skip auth"
+            exit 0
+          fi
+          printf '%s\n' "$GCP_SA_KEY" > /tmp/gcp-key.json
+          gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
+
+      - name: Generate and upload manifest
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          if [ -z "$GCP_SA_KEY" ]; then
+            echo "⚠️  GCP_SA_KEY non configurato — dry-run only"
+            python scripts/scan_gcs_manifest.py --pretty | head -20
+          else
+            python scripts/scan_gcs_manifest.py --upload
+          fi

@@ -13,6 +13,7 @@ from lab_connectors.gcs.client import (
     upload_file,
     upload_string,
 )
+from lab_connectors.gcs.manifest import read_manifest
 from lab_connectors.gcs.paths import (
     CLEAN_BUCKET,
     MART_BUCKET,
@@ -48,4 +49,6 @@ __all__ = [
     "pipeline_run",
     "catalog_manifest",
     "mart_parquet",
+    # Manifest
+    "read_manifest",
 ]
