@@ -22,6 +22,7 @@ def _fake_urlopen(data: bytes) -> MagicMock:
 class TestBuildManifest:
     """build_manifest() — aggregazione oggetti da list_objects."""
 
+    @pytest.mark.pure_unit
     def test_build_manifest_success(self):
         """Scansione di bucket con file misti."""
         fake_objects_a = [
@@ -43,6 +44,7 @@ class TestBuildManifest:
         assert "generated_at" in manifest
         assert "buckets" in manifest
 
+    @pytest.mark.pure_unit
     def test_build_manifest_file_no_year(self):
         """File senza anno nel path non rompe."""
         fake_objects_a = [
@@ -55,6 +57,7 @@ class TestBuildManifest:
         assert manifest["files"][0]["slug"] == "radar"
         assert manifest["files"][0]["year"] is None
 
+    @pytest.mark.pure_unit
     def test_build_manifest_empty(self):
         """Bucket vuoto."""
         with patch("lab_connectors.gcs.manifest.list_objects", return_value=[]):
@@ -68,6 +71,7 @@ class TestBuildManifest:
 class TestReadManifest:
     """read_manifest() — fetch e parsing del manifest pubblico."""
 
+    @pytest.mark.pure_unit
     def test_read_manifest_success(self):
         """JSON valido restituisce dict."""
         fake_data = {"generated_at": "2026-06-21", "file_count": 10, "files": []}
@@ -78,6 +82,7 @@ class TestReadManifest:
 
         assert result["file_count"] == 10
 
+    @pytest.mark.contract
     def test_read_manifest_404(self):
         """404 solleva FileNotFoundError."""
         from urllib.error import HTTPError
@@ -88,6 +93,7 @@ class TestReadManifest:
             with pytest.raises(FileNotFoundError):
                 read_manifest("https://example.com/404")
 
+    @pytest.mark.contract
     def test_read_manifest_403(self):
         """403 solleva FileNotFoundError."""
         from urllib.error import HTTPError
@@ -98,6 +104,7 @@ class TestReadManifest:
             with pytest.raises(FileNotFoundError):
                 read_manifest("https://example.com/403")
 
+    @pytest.mark.contract
     def test_read_manifest_500(self):
         """500 solleva RuntimeError."""
         from urllib.error import HTTPError
@@ -108,6 +115,7 @@ class TestReadManifest:
             with pytest.raises(RuntimeError):
                 read_manifest("https://example.com/500")
 
+    @pytest.mark.contract
     def test_read_manifest_corrupted_json(self):
         """JSON malformato solleva ValueError."""
         fake_urlopen = _fake_urlopen(b"not json at all")
@@ -116,6 +124,7 @@ class TestReadManifest:
             with pytest.raises(ValueError, match="corrotto"):
                 read_manifest("https://example.com/corrupted")
 
+    @pytest.mark.contract
     def test_read_manifest_timeout(self):
         """Timeout solleva TimeoutError."""
         with patch("lab_connectors.gcs.manifest.urlopen", side_effect=TimeoutError("timed out")):
