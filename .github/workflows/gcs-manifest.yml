@@ -2,38 +2,47 @@ name: GCS Manifest
 
 on:
   schedule:
-    # Ogni giorno alle 6:00 UTC
     - cron: "0 6 * * *"
   workflow_dispatch:
-    # Eseguibile manualmente da GitHub UI
+
+env:
+  GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+  GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
 jobs:
   scan-and-upload:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write  # per workload identity federation
+      id-token: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
 
       - name: Install dependencies
-        run: |
-          pip install -e ".[gcs]"
-          pip install google-cloud-storage
+        run: pip install -e ".[gcs]"
 
-      - name: Authenticate to GCS
-        uses: google-github-actions/auth@v2
+      - name: Authenticate to Google Cloud
+        if: env.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && env.GCP_SERVICE_ACCOUNT != ''
+        uses: google-github-actions/auth@v3
         with:
-          workload_identity_provider: ${{ secrets.GCS_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCS_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
-      - name: Scan and upload manifest
-        run: python scripts/scan_gcs_manifest.py --upload
+      - name: Set up gcloud
+        if: env.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && env.GCP_SERVICE_ACCOUNT != ''
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Generate manifest
+        run: |
+          python scripts/scan_gcs_manifest.py --pretty > /tmp/gcs_manifest.json
+
+      - name: Upload manifest to GCS
+        if: env.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && env.GCP_SERVICE_ACCOUNT != ''
+        run: |
+          gcloud storage cp /tmp/gcs_manifest.json gs://dataciviclab-clean/registry/gcs_manifest.json \
+            --content-type="application/json"
