@@ -78,6 +78,12 @@ def safe_connect(
             for ext in extensions:
                 con.execute(f"INSTALL {ext}")
                 con.execute(f"LOAD {ext}")
+        # httpfs: la config passata a duckdb.connect() non viene riconosciuta
+        # dall'estensione. Va applicata via SET dopo LOAD.
+        if config:
+            for k, v in config.items():
+                if k.startswith("s3_"):
+                    con.execute(f"SET {k} = '{v}'")
         yield con
     finally:
         try:

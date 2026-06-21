@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from typing import Any
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 from lab_connectors.gcs.client import list_objects, upload_string
@@ -86,13 +87,20 @@ def read_manifest(url: str | None = None) -> dict[str, Any]:
         Dict con generated_at, file_count, total_size_bytes, files.
 
     Raises:
-        FileNotFoundError: se il manifest non è raggiungibile.
+        FileNotFoundError: se il manifest non è raggiungibile (404/403).
         ValueError: se il JSON è malformato.
+        TimeoutError: se la richiesta scade.
 
     """
     fetch_url = url or MANIFEST_URL
     try:
         with urlopen(fetch_url, timeout=15) as resp:
             return json.loads(resp.read().decode("utf-8"))
-    except Exception as e:
-        raise FileNotFoundError(f"Manifest non raggiungibile a {fetch_url}: {e}") from e
+    except HTTPError as e:
+        if e.code in (404, 403):
+            raise FileNotFoundError(f"Manifest non trovato a {fetch_url} (HTTP {e.code})") from e
+        raise RuntimeError(f"Errore HTTP {e.code} per manifest a {fetch_url}") from e
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Manifest corrotto a {fetch_url}: {e}") from e
+    except TimeoutError as e:
+        raise TimeoutError(f"Timeout lettura manifest da {fetch_url}") from e

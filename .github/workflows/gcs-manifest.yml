@@ -24,6 +24,7 @@ jobs:
           pip install google-cloud-storage
 
       - name: Authenticate to Google Cloud
+        if: secrets.GCP_SA_KEY != ''
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
@@ -31,4 +32,11 @@ jobs:
           gcloud auth activate-service-account --key-file=/tmp/gcp-key.json
 
       - name: Generate and upload manifest
+        if: secrets.GCP_SA_KEY != ''
         run: python scripts/scan_gcs_manifest.py --upload
+
+      - name: Dry-run (print manifest)
+        if: secrets.GCP_SA_KEY == ''
+        run: |
+          echo "⚠️  GCP_SA_KEY non configurato — solo dry-run:"
+          python scripts/scan_gcs_manifest.py --pretty | head -15
