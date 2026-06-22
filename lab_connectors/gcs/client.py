@@ -14,8 +14,6 @@ import json
 import threading
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlencode
-from urllib.request import Request, urlopen
 
 # ---------------------------------------------------------------------------
 # Client singleton
@@ -65,6 +63,9 @@ def _gcs_http_list(
     page_token: str | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """List objects via HTTP API. Returns (items, next_page_token)."""
+    from urllib.parse import quote, urlencode
+    from urllib.request import urlopen
+
     params: dict[str, str | int] = {
         "prefix": prefix,
         "fields": "items(name,size,updated),nextPageToken",
@@ -85,6 +86,9 @@ def _gcs_http_list(
 
 def _gcs_http_head(bucket: str, key: str) -> int | None:
     """HEAD request a un oggetto GCS. Ritorna status code o None su errore."""
+    from urllib.parse import quote
+    from urllib.request import Request, urlopen
+
     url = f"https://storage.googleapis.com/{quote(bucket, safe='')}/{quote(key, safe='/_-.')}"
     try:
         req = Request(url, method="HEAD")
@@ -226,6 +230,8 @@ def check_public(url: str) -> dict[str, Any]:
         content_type (str|None)
 
     """
+    from urllib.request import Request, urlopen
+
     try:
         req = Request(url, method="HEAD")
         with urlopen(req, timeout=30) as resp:

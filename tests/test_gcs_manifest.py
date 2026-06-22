@@ -77,7 +77,7 @@ class TestReadManifest:
         fake_data = {"generated_at": "2026-06-21", "file_count": 10, "files": []}
         fake_urlopen = _fake_urlopen(json.dumps(fake_data).encode("utf-8"))
 
-        with patch("lab_connectors.gcs.manifest.urlopen", return_value=fake_urlopen):
+        with patch("urllib.request.urlopen", return_value=fake_urlopen):
             result = read_manifest("https://example.com/manifest.json")
 
         assert result["file_count"] == 10
@@ -89,7 +89,7 @@ class TestReadManifest:
 
         fake_error = HTTPError("https://example.com/404", 404, "Not Found", {}, None)
 
-        with patch("lab_connectors.gcs.manifest.urlopen", side_effect=fake_error):
+        with patch("urllib.request.urlopen", side_effect=fake_error):
             with pytest.raises(FileNotFoundError):
                 read_manifest("https://example.com/404")
 
@@ -100,7 +100,7 @@ class TestReadManifest:
 
         fake_error = HTTPError("https://example.com/403", 403, "Forbidden", {}, None)
 
-        with patch("lab_connectors.gcs.manifest.urlopen", side_effect=fake_error):
+        with patch("urllib.request.urlopen", side_effect=fake_error):
             with pytest.raises(FileNotFoundError):
                 read_manifest("https://example.com/403")
 
@@ -111,7 +111,7 @@ class TestReadManifest:
 
         fake_error = HTTPError("https://example.com/500", 500, "Server Error", {}, None)
 
-        with patch("lab_connectors.gcs.manifest.urlopen", side_effect=fake_error):
+        with patch("urllib.request.urlopen", side_effect=fake_error):
             with pytest.raises(RuntimeError):
                 read_manifest("https://example.com/500")
 
@@ -120,13 +120,13 @@ class TestReadManifest:
         """JSON malformato solleva ValueError."""
         fake_urlopen = _fake_urlopen(b"not json at all")
 
-        with patch("lab_connectors.gcs.manifest.urlopen", return_value=fake_urlopen):
+        with patch("urllib.request.urlopen", return_value=fake_urlopen):
             with pytest.raises(ValueError, match="corrotto"):
                 read_manifest("https://example.com/corrupted")
 
     @pytest.mark.contract
     def test_read_manifest_timeout(self):
         """Timeout solleva TimeoutError."""
-        with patch("lab_connectors.gcs.manifest.urlopen", side_effect=TimeoutError("timed out")):
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
             with pytest.raises(TimeoutError):
                 read_manifest("https://example.com/timeout")

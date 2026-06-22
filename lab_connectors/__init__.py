@@ -12,7 +12,6 @@ from typing import Any
 _LAZY_SUBMODULES: dict[str, str] = {
     # lab_connectors.http
     "CircuitOpenError": "lab_connectors.http",
-    "GenericPool": "lab_connectors.http",
     "HttpClient": "lab_connectors.http",
     "HttpFallbackError": "lab_connectors.http",
     "HttpResult": "lab_connectors.http",

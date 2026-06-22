@@ -11,7 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from lab_connectors.gcs import check_public, list_objects, object_exists
+from lab_connectors.gcs import list_objects, object_exists
+from lab_connectors.gcs.client import check_public
 
 pytestmark = pytest.mark.adapter
 
@@ -51,7 +52,7 @@ class GcsListObjectsTest(unittest.TestCase):
         results = list_objects("dataciviclab-clean", prefix="__nonexistent__", limit=5, auth=False)
         self.assertEqual(results, [])
 
-    @patch("lab_connectors.gcs.client.urlopen")
+    @patch("urllib.request.urlopen")
     def test_list_http_parse(self, mock_urlopen) -> None:
         """Parsing corretto della risposta HTTP API."""
         import json
@@ -79,7 +80,7 @@ class GcsListObjectsTest(unittest.TestCase):
 class GcsObjectExistsTest(unittest.TestCase):
     """object_exists via HEAD pubblico."""
 
-    @patch("lab_connectors.gcs.client.urlopen")
+    @patch("urllib.request.urlopen")
     def test_exists_returns_true(self, mock_urlopen) -> None:
         from io import BytesIO
 
@@ -89,7 +90,7 @@ class GcsObjectExistsTest(unittest.TestCase):
 
         self.assertTrue(object_exists("test-bucket", "existing/file.parquet"))
 
-    @patch("lab_connectors.gcs.client.urlopen")
+    @patch("urllib.request.urlopen")
     def test_not_found_returns_false(self, mock_urlopen) -> None:
         from urllib.error import HTTPError
 
@@ -101,7 +102,7 @@ class GcsObjectExistsTest(unittest.TestCase):
 class GcsCheckPublicTest(unittest.TestCase):
     """check_public su URL pubblico."""
 
-    @patch("lab_connectors.gcs.client.urlopen")
+    @patch("urllib.request.urlopen")
     def test_accessible(self, mock_urlopen) -> None:
         from io import BytesIO
 
@@ -114,7 +115,7 @@ class GcsCheckPublicTest(unittest.TestCase):
         self.assertTrue(result["accessible"])
         self.assertEqual(result["status_code"], 200)
 
-    @patch("lab_connectors.gcs.client.urlopen")
+    @patch("urllib.request.urlopen")
     def test_not_found(self, mock_urlopen) -> None:
         from urllib.error import HTTPError
 
@@ -215,7 +216,7 @@ class GcsHttpPaginationTest(unittest.TestCase):
     """Test per la paginazione HTTP fallback (auth=None senza SDK)."""
 
     @patch("lab_connectors.gcs.client._get_storage_client")
-    @patch("lab_connectors.gcs.client.urlopen")
+    @patch("urllib.request.urlopen")
     def test_auth_none_fallback_no_pagination(self, mock_urlopen, mock_get_client):
         """auth=None senza SDK → fallback HTTP, pagina singola."""
         import json
@@ -239,7 +240,7 @@ class GcsHttpPaginationTest(unittest.TestCase):
         self.assertEqual(results[0]["size"], 100)
 
     @patch("lab_connectors.gcs.client._get_storage_client")
-    @patch("lab_connectors.gcs.client.urlopen")
+    @patch("urllib.request.urlopen")
     def test_auth_none_fallback_with_pagination(self, mock_urlopen, mock_get_client):
         """auth=None senza SDK → paginazione HTTP, 2 pagine."""
         import json
@@ -276,7 +277,7 @@ class GcsHttpPaginationTest(unittest.TestCase):
         self.assertIn("p2_0.parquet", [r["name"] for r in results])
 
     @patch("lab_connectors.gcs.client._get_storage_client")
-    @patch("lab_connectors.gcs.client.urlopen")
+    @patch("urllib.request.urlopen")
     def test_auth_none_fallback_with_limit(self, mock_urlopen, mock_get_client):
         """auth=None con limit → paginazione interrotta al raggiungimento del limite."""
         import json
