@@ -41,22 +41,11 @@ result = client.post("https://example.com/api", json={"query": "..."})
 | `circuit_threshold` | `0` | Errori consecutivi per aprire il circuit breaker per-host (0 = disabilitato) |
 | `user_agent` | `DataCivicLab-HttpClient/0.1` | User-Agent per le richieste |
 
-#### `GenericPool` — thread pool per richieste parallele
+#### `GenericPool` — thread pool per richieste parallele (uso interno)
 
-Wrapper su `concurrent.futures.ThreadPoolExecutor` per eseguire richieste HTTP in parallelo. API: `submit(method, url)` + `wait(futures)`.
-
-```python
-from lab_connectors.http import HttpClient, HttpResult
-from lab_connectors.http.pool import GenericPool
-
-pool = GenericPool(workers=5)
-futures = {}
-for url in urls:
-    futures[pool.submit("head", url)] = url
-
-# results in submission order
-results: list[HttpResult] = GenericPool.wait(list(futures))
-```
+Wrapper su `concurrent.futures.ThreadPoolExecutor` per eseguire richieste HTTP in parallelo.
+**Non esportato dalla superficie pubblica** — non più raccomandato per nuovi consumer.
+Usa direttamente `concurrent.futures.ThreadPoolExecutor` con `HttpClient` invece.
 
 #### Client SPARQL
 
@@ -194,10 +183,6 @@ upload_file("/tmp/file.parquet", "dataciviclab-clean", "slug/2024/file.parquet")
 
 # Upload string content (requires auth)
 upload_string('{"key": "value"}', "dataciviclab-clean", "slug/2024/manifest.json")
-
-# Verify public reachability (HEAD + Range fallback)
-ok = check_public("https://storage.googleapis.com/dataciviclab-clean/slug/2024/file.parquet")
-# → {"accessible": True, "status_code": 200, "content_type": "application/octet-stream"}
 ```
 
 #### Requisiti
@@ -206,7 +191,7 @@ ok = check_public("https://storage.googleapis.com/dataciviclab-clean/slug/2024/f
 pip install lab-connectors[gcs]
 ```
 
-La modalità `auth=False`, `object_exists()` e `check_public()` non richiedono il SDK — funzionano con sole librerie stdlib. `upload_file()` e `upload_string()` richiedono invece SDK autenticato.
+`object_exists()` non richiede il SDK (solo HTTP API). `upload_file()` e `upload_string()` richiedono invece SDK autenticato.
 
 #### Path contract GCS (`lab_connectors.gcs.paths`)
 
@@ -308,16 +293,15 @@ with gcs_connect("s3://dataciviclab-clean/slug/2024/file.parquet") as con:
     result = con.execute("SELECT count(*) FROM read_parquet(?)", ["s3://..."]).fetchone()
 ```
 
-#### `GCS_S3_CONFIG`
+#### `GCS_S3_CONFIG` (deprecato)
 
 Dict di configurazione DuckDB per l'interfaccia S3-compatible di GCS.
-Utile se devi configurare DuckDB manualmente:
+**Deprecato.** Preferisci `gcs_connect()` con URL HTTPS — DuckDB legge
+`https://storage.googleapis.com/...` nativamente senza estensione `httpfs`,
+evitando il bug "Information loss on integer cast".
 
 ```python
-from lab_connectors.duckdb import GCS_S3_CONFIG
-
-with safe_connect(extensions=["httpfs"], config=GCS_S3_CONFIG) as con:
-    con.execute("SELECT * FROM read_parquet('s3://bucket/file.parquet')")
+from lab_connectors.duckdb import GCS_S3_CONFIG  # DeprecationWarning
 ```
 
 #### Requisiti
@@ -422,3 +406,14 @@ mypy lab_connectors/
 - skill e playbook (stanno in `lab-ops`)
 - logica core di dataset (stanno nei repo dominio)
 - tool MCP di dominio specifici (stanno nei rispettivi repo)
+
+### Eccezione: `mcp_servers/github-discussions`
+
+Il server MCP per GitHub Discussions (`mcp_servers/github-discussions/`) viola la regola sopra
+perché è un server MCP di dominio, non un connector infrastrutturale.
+
+**Perché sta qui**: `lab-connectors` è l'unico repo garantito presente in ogni checkout del Lab
+(è dipendenza pip di toolkit, SO, DI, data-explorer, ACB, lab-dashboard, eurostat, open-siope,
+lab-ask). Il server discussions serve cross-repo e un repo separato sarebbe overkill per 7 tool MCP.
+
+**Non è installabile via pip** — funziona solo da checkout. Configurazione in `opencode.json`:

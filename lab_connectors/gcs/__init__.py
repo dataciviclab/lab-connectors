@@ -7,7 +7,6 @@ Il modulo ``paths`` espone i path contract canonici per tutti gli artifact GCS d
 from __future__ import annotations
 
 from lab_connectors.gcs.client import (
-    check_public,
     list_objects,
     object_exists,
     upload_file,
@@ -31,7 +30,6 @@ from lab_connectors.gcs.paths import (
 
 __all__ = [
     # GCS client
-    "check_public",
     "list_objects",
     "object_exists",
     "upload_file",

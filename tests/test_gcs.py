@@ -11,7 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from lab_connectors.gcs import check_public, list_objects, object_exists
+from lab_connectors.gcs import list_objects, object_exists
+from lab_connectors.gcs.client import check_public
 
 pytestmark = pytest.mark.adapter
 

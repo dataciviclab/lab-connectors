@@ -19,6 +19,24 @@ Uso::
 
 from __future__ import annotations
 
-from lab_connectors.duckdb.core import GCS_S3_CONFIG, gcs_connect, safe_connect
+import warnings
+from typing import Any
+
+from lab_connectors.duckdb.core import gcs_connect, safe_connect
 
 __all__ = ["GCS_S3_CONFIG", "gcs_connect", "safe_connect"]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy accessor with deprecation warning for GCS_S3_CONFIG."""
+    if name == "GCS_S3_CONFIG":
+        warnings.warn(
+            "GCS_S3_CONFIG is deprecated. Use gcs_connect() with HTTPS URLs — "
+            "DuckDB reads https://storage.googleapis.com/... natively without httpfs.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from lab_connectors.duckdb.core import GCS_S3_CONFIG as _config
+
+        return _config
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
