@@ -38,5 +38,6 @@ def __getattr__(name: str) -> Any:
         )
         from lab_connectors.duckdb.core import GCS_S3_CONFIG as _config
 
+        globals()["GCS_S3_CONFIG"] = _config  # cachea per evitare doppio warning
         return _config
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

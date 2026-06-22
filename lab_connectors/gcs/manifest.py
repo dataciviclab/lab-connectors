@@ -12,8 +12,6 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from typing import Any
-from urllib.error import HTTPError
-from urllib.request import urlopen
 
 from lab_connectors.gcs.client import list_objects, upload_string
 from lab_connectors.gcs.paths import CLEAN_BUCKET, MART_BUCKET
@@ -92,6 +90,9 @@ def read_manifest(url: str | None = None) -> dict[str, Any]:
         TimeoutError: se la richiesta scade.
 
     """
+    from urllib.error import HTTPError
+    from urllib.request import urlopen
+
     fetch_url = url or MANIFEST_URL
     try:
         with urlopen(fetch_url, timeout=15) as resp:
