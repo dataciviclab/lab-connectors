@@ -59,10 +59,7 @@ def _sparql_get(
     try:
         result = client.get(
             url,
-            headers={
-                "Accept": "application/sparql-results+xml,"
-                "application/sparql-results+json,application/json"
-            },
+            headers={"Accept": "application/sparql-results+json,application/json"},
         )
         if result.is_error:
             return None
