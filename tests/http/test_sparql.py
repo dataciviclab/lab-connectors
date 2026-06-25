@@ -18,6 +18,7 @@ from lab_connectors.http.sparql import (
     _compact_uri,
     _ensure_str_list,
     _looks_like_csv,
+    _parse_sparql_xml,
     discover_graphs,
     execute_sparql,
     fetch_csv,
@@ -128,6 +129,94 @@ class TestPureFunctions:
         assert lines[0] == "a,b"
         assert lines[1] == "1,x"
         assert lines[2] == "2,y"
+
+    # ── _parse_sparql_xml ──────────────────────────────────────────────
+
+    @pytest.mark.pure_unit
+    def test_parse_sparql_xml_literal_and_uri(self):
+        xml = """<?xml version="1.0"?>
+<sparql xmlns="http://www.w3.org/2005/sparql-results#">
+  <head>
+    <variable name="x"/>
+    <variable name="h"/>
+  </head>
+  <results>
+    <result>
+      <binding name="x"><literal>First</literal></binding>
+      <binding name="h"><literal xml:lang="en">Title</literal></binding>
+    </result>
+    <result>
+      <binding name="x"><uri>http://example.org</uri></binding>
+    </result>
+  </results>
+</sparql>"""
+        result = _parse_sparql_xml(xml)
+        assert len(result) == 2
+        assert result[0]["x"]["type"] == "literal"
+        assert result[0]["x"]["value"] == "First"
+        assert result[0]["h"]["xml:lang"] == "en"
+        assert result[0]["h"]["value"] == "Title"
+        assert result[1]["x"]["type"] == "uri"
+        assert result[1]["x"]["value"] == "http://example.org"
+
+    @pytest.mark.pure_unit
+    def test_parse_sparql_xml_empty_results(self):
+        xml = """<?xml version="1.0"?>
+<sparql xmlns="http://www.w3.org/2005/sparql-results#">
+  <head>
+    <variable name="x"/>
+  </head>
+  <results>
+  </results>
+</sparql>"""
+        assert _parse_sparql_xml(xml) == []
+
+    @pytest.mark.pure_unit
+    def test_parse_sparql_xml_no_results_elem(self):
+        xml = """<?xml version="1.0"?>
+<sparql xmlns="http://www.w3.org/2005/sparql-results#">
+  <head>
+    <variable name="x"/>
+  </head>
+</sparql>"""
+        assert _parse_sparql_xml(xml) == []
+
+    @pytest.mark.pure_unit
+    def test_parse_sparql_xml_typed_literal(self):
+        xml = """<?xml version="1.0"?>
+<sparql xmlns="http://www.w3.org/2005/sparql-results#">
+  <head>
+    <variable name="cnt"/>
+  </head>
+  <results>
+    <result>
+      <binding name="cnt"><literal datatype="http://www.w3.org/2001/XMLSchema#integer">42</literal></binding>
+    </result>
+  </results>
+</sparql>"""
+        result = _parse_sparql_xml(xml)
+        assert len(result) == 1
+        assert result[0]["cnt"]["type"] == "literal"
+        assert result[0]["cnt"]["value"] == "42"
+        assert result[0]["cnt"]["datatype"] == "http://www.w3.org/2001/XMLSchema#integer"
+
+    @pytest.mark.pure_unit
+    def test_parse_sparql_xml_bnode(self):
+        xml = """<?xml version="1.0"?>
+<sparql xmlns="http://www.w3.org/2005/sparql-results#">
+  <head>
+    <variable name="s"/>
+  </head>
+  <results>
+    <result>
+      <binding name="s"><bnode>nodeID123</bnode></binding>
+    </result>
+  </results>
+</sparql>"""
+        result = _parse_sparql_xml(xml)
+        assert len(result) == 1
+        assert result[0]["s"]["type"] == "bnode"
+        assert result[0]["s"]["value"] == "nodeID123"
 
 
 @pytest.mark.contract
