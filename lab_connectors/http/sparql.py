@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import re
 import urllib.parse
+import xml.etree.ElementTree as ET
 from typing import Any, cast
 
 import requests
@@ -24,6 +25,66 @@ log = logging.getLogger(__name__)
 
 # Regex per individuare LIMIT/OFFSET già presenti in una query SPARQL
 _RE_HAS_LIMIT = re.compile(r"\bLIMIT\s+\d+", re.IGNORECASE)
+
+# Namespace SPARQL Results XML (W3C Standard)
+_SPARQL_NS = "http://www.w3.org/2005/sparql-results#"
+
+
+def _parse_sparql_xml(xml_text: str) -> list[dict[str, Any]]:
+    """Parsa SPARQL Results XML in list[dict] identico al formato JSON.
+
+    Standard: SPARQL 1.1 Query Results XML Format (W3C).
+    https://www.w3.org/TR/rdf-sparql-XMLres/
+
+    Args:
+        xml_text: XML response body (application/sparql-results+xml).
+
+    Returns:
+        Lista di binding, ogni binding e' un dict
+        ``{var: {"type": str, "value": str}}``.
+        Lista vuota se la query non restituisce risultati.
+
+    """
+    ns = {"s": _SPARQL_NS}
+    root = ET.fromstring(xml_text)
+
+    results_elem = root.find("s:results", ns)
+    if results_elem is None:
+        return []
+
+    bindings: list[dict[str, Any]] = []
+    for result in results_elem.findall("s:result", ns):
+        binding: dict[str, Any] = {}
+        for b in result.findall("s:binding", ns):
+            name = b.get("name")
+            # Il binding ha un solo child: literal, uri, bnode o typed-literal
+            child = next(iter(b), None)
+            if child is None or name is None:
+                continue
+
+            # Estrai il tag locale (dopo il namespace)
+            tag = child.tag
+            local_tag = tag.split("}", 1)[-1] if "}" in tag else tag
+            value = child.text or ""
+
+            entry: dict[str, str] = {"type": local_tag, "value": value}
+
+            if local_tag == "literal":
+                lang = child.get("{http://www.w3.org/XML/1998/namespace}lang")
+                if lang:
+                    entry["xml:lang"] = lang
+                datatype = child.get("datatype")
+                if datatype and not lang:
+                    entry["datatype"] = datatype
+            elif local_tag == "typed-literal":
+                datatype = child.get("datatype")
+                if datatype:
+                    entry["datatype"] = datatype
+
+            binding[name] = entry
+        bindings.append(binding)
+
+    return bindings
 
 
 def _sparql_post(
@@ -43,6 +104,10 @@ def _sparql_post(
         if result.is_error:
             return None
         resp = cast(requests.Response, result.response)
+        content_type = (resp.headers.get("Content-Type") or "").lower()
+
+        if "sparql-results+xml" in content_type:
+            return _parse_sparql_xml(resp.text)
         payload = resp.json()
         return ((payload.get("results") or {}).get("bindings")) or []
     except Exception:
@@ -67,9 +132,7 @@ def _sparql_get(
         content_type = (resp.headers.get("Content-Type") or "").lower()
 
         if "sparql-results+xml" in content_type:
-            # SPARQL Results XML — ritorniamo None, non supportiamo XML qui
-            log.warning("SPARQL endpoint returned XML, JSON not available")
-            return None
+            return _parse_sparql_xml(resp.text)
         payload = resp.json()
         return ((payload.get("results") or {}).get("bindings")) or []
     except Exception:
