@@ -268,3 +268,66 @@ def test_post_user_agent(
     client.post("https://example.test/api")
 
     assert calls[0]["headers"]["User-Agent"] == expected
+
+
+# ---------------------------------------------------------------------------
+# Proxy fallback on 403
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.contract
+@pytest.mark.parametrize("method", ["post", "get", "head"])
+def test_proxy_fallback_on_403(
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+) -> None:
+    """403 triggers a single extra attempt through BLOCKED_SOURCE_PROXY.
+
+    The proxy attempt does NOT consume the retry budget — works even
+    with max_retries=1.
+    """
+    monkeypatch.setenv("BLOCKED_SOURCE_PROXY", "http://proxy.test:8888")
+
+    call_count: int = 0
+
+    def fake_request(url: str, **kwargs: Any) -> _FakeResponse:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return _FakeResponse(403, b"blocked")
+        # Second call: verify proxy was passed
+        assert kwargs.get("proxies") == {"http": "http://proxy.test:8888", "https": "http://proxy.test:8888"}
+        return _FakeResponse(200, b"ok")
+
+    monkeypatch.setattr(requests, method, fake_request)
+    # Also patch Session method for SSL fallback compatibility
+    session_attr = getattr(requests.Session, method, None)
+    if session_attr:
+        monkeypatch.setattr(requests.Session, method, lambda self, *a, **kw: fake_request(*a, **kw))
+
+    client = HttpClient(max_retries=1, timeout=15)
+    fn = getattr(client, method)
+    result = fn("https://blocked.test/api")
+
+    assert result.is_ok, f"{method} should succeed via proxy fallback"
+    assert call_count == 2, f"{method} should retry exactly once with proxy"
+
+
+@pytest.mark.contract
+def test_proxy_fallback_skipped_when_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without BLOCKED_SOURCE_PROXY, a 403 is returned as-is."""
+    call_count: int = 0
+
+    def fake_post(url: str, **kwargs: Any) -> _FakeResponse:
+        nonlocal call_count
+        call_count += 1
+        return _FakeResponse(403, b"blocked")
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    client = HttpClient(max_retries=0, timeout=15)
+    result = client.post("https://blocked.test/api")
+
+    assert result.response is not None
+    assert result.response.status_code == 403
+    assert call_count == 1  # no retry, no proxy fallback
