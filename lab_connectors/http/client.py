@@ -1,4 +1,4 @@
-"""HTTP client with SSL fallback, retry, backoff, and 429 handling.
+"""HTTP client with SSL fallback, retry, backoff, 429 handling, and proxy fallback.
 
 This module provides a shared HTTP client used by all Lab repos.
 It wraps requests with:
@@ -7,6 +7,7 @@ It wraps requests with:
 - Configurable timeout and User-Agent
 - Exponential backoff retry (configurable)
 - 429 Retry-After handling
+- Proxy fallback on 403/407 (via BLOCKED_SOURCE_PROXY env)
 - HEAD, GET and POST methods
 - HttpResult return type (no exceptions raised on HTTP errors)
 """
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import os
 import random
 import threading
 import time
@@ -158,6 +160,24 @@ class HttpClient:
                 self._cb_consecutive[host] = 0
 
     # ------------------------------------------------------------------
+    # Proxy fallback
+    # ------------------------------------------------------------------
+
+    PROXY_BLOCKED_STATUSES = {403, 407}
+
+    @staticmethod
+    def _resolve_fallback_proxies() -> dict[str, str] | None:
+        """Read fallback proxy from ``BLOCKED_SOURCE_PROXY`` environment variable.
+
+        GitHub Variable (org-level) già configurata in
+        ``dataciviclab/dataset-incubator`` settings.
+        """
+        url = os.environ.get("BLOCKED_SOURCE_PROXY")
+        if not url:
+            return None
+        return {"http": url, "https": url}
+
+    # ------------------------------------------------------------------
     # Generic retry loop
     # ------------------------------------------------------------------
 
@@ -171,6 +191,10 @@ class HttpClient:
         **kwargs: Any,
     ) -> HttpResult:
         """Execute an HTTP request with retry, backoff, and SSL fallback.
+
+        If the server returns 403/407 and ``BLOCKED_SOURCE_PROXY`` is set,
+        a single extra attempt is made through the proxy — independent of
+        the retry budget.
 
         Args:
             method_name: HTTP method name for logging (e.g. "HEAD", "GET").
@@ -186,6 +210,8 @@ class HttpClient:
         """
         last_err: Exception | None = None
         primary_exc: requests.exceptions.SSLError | None = None
+        fallback_proxies = self._resolve_fallback_proxies()
+        blocked_status: int | None = None
 
         for attempt in range(effective_retries):
             if attempt > 0:
@@ -228,7 +254,27 @@ class HttpClient:
                 last_err = Exception(f"HTTP {response.status_code}")
                 continue
 
+            # 403/407 — save status for proxy fallback (does NOT consume retry)
+            if response.status_code in self.PROXY_BLOCKED_STATUSES and fallback_proxies:
+                blocked_status = response.status_code
+                break  # exit retry loop → proxy fallback below
+
             return HttpResult(response=response, err=None, ssl_fallback_used=None)
+
+        # Proxy fallback: one extra attempt outside the retry budget
+        if blocked_status is not None and fallback_proxies:
+            logger.info(
+                "HTTP %s on %s %s — retrying with fallback proxy",
+                blocked_status,
+                method_name,
+                url,
+            )
+            try:
+                kwargs["proxies"] = fallback_proxies
+                response = request_fn(url, timeout=self.timeout, **kwargs)
+                return HttpResult(response=response, err=None)
+            except requests.exceptions.RequestException as exc:
+                return HttpResult(response=None, err=exc, ssl_fallback_used=False)
 
         return HttpResult(
             response=None,
