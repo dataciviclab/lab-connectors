@@ -310,7 +310,7 @@ class HttpClient:
             )
 
         headers = kwargs.pop("headers", None) or {}
-        headers["User-Agent"] = self.user_agent
+        headers.setdefault("User-Agent", self.user_agent)
         kwargs["headers"] = headers
         kwargs.setdefault("allow_redirects", True)
 
@@ -380,7 +380,7 @@ class HttpClient:
             )
 
         headers = kwargs.pop("headers", None) or {}
-        headers["User-Agent"] = self.user_agent
+        headers.setdefault("User-Agent", self.user_agent)
         kwargs["headers"] = headers
 
         result = self._execute(
@@ -461,7 +461,7 @@ class HttpClient:
             )
 
         headers = kwargs.pop("headers", None) or {}
-        headers["User-Agent"] = self.user_agent
+        headers.setdefault("User-Agent", self.user_agent)
         kwargs["headers"] = headers
 
         result = self._execute(
