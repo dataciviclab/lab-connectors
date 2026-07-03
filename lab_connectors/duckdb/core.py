@@ -44,7 +44,6 @@ GCS_S3_CONFIG: dict[str, str] = {
 
 _DEFAULT_CONFIG: dict[str, str] = {
     "memory_limit": "2GB",
-    "preserve_insertion_order": "false",
 }
 
 
