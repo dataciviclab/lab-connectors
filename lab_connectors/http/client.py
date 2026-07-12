@@ -237,6 +237,20 @@ class HttpClient:
                 last_err = exc
                 if attempt < effective_retries - 1:
                     continue
+                # Se è l'ultimo tentativo e il proxy è configurato, ritenta via proxy
+                # (copre timeout/connection error su siti che bloccano GHA — es. MUR, ISTAT)
+                if fallback_proxies:
+                    logger.info(
+                        "Ultimo tentativo fallito per %s %s — riprovo con fallback proxy",
+                        method_name,
+                        url,
+                    )
+                    try:
+                        kwargs["proxies"] = fallback_proxies
+                        response = request_fn(url, timeout=self.timeout, **kwargs)
+                        return HttpResult(response=response, err=None)
+                    except requests.exceptions.RequestException:
+                        pass  # fallisce anche col proxy → errore originale sotto
                 return HttpResult(response=None, err=exc, ssl_fallback_used=False)
             except Exception as exc:
                 return HttpResult(response=None, err=exc, ssl_fallback_used=False)
