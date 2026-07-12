@@ -18,6 +18,7 @@ import datetime
 import logging
 import os
 import random
+import ssl
 import threading
 import time
 import urllib.parse
@@ -27,11 +28,25 @@ from typing import Any
 
 import requests
 import urllib3
+from requests.adapters import HTTPAdapter
 from urllib3.exceptions import InsecureRequestWarning
 
 from lab_connectors.http.types import CircuitOpenError, HttpFallbackError, HttpResult
 
 logger = logging.getLogger("lab_connectors.http")
+
+
+class _Tls12Adapter(HTTPAdapter):
+    """Adapter che forza TLS 1.2 (per server PA che non supportano TLS 1.3)."""
+
+    def init_poolmanager(self, *args: Any, **kwargs: Any) -> Any:
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        kwargs["ssl_context"] = ctx
+        return super().init_poolmanager(*args, **kwargs)
 
 
 class HttpClient:
@@ -345,7 +360,7 @@ class HttpClient:
         primary_exc: requests.exceptions.SSLError,
         kwargs: dict[str, Any],
     ) -> HttpResult:
-        """SSL fallback for HEAD — strips allow_redirects to avoid collision."""
+        """SSL fallback for HEAD — verify=False poi TLS 1.2."""
         fallback_kwargs = {
             k: v for k, v in kwargs.items() if k not in ("headers", "allow_redirects")
         }
@@ -359,10 +374,25 @@ class HttpClient:
             )
             return HttpResult(response=response, err=None, ssl_fallback_used=True)
         except requests.exceptions.RequestException as fallback_exc:
-            logger.warning("Fallback HEAD also failed for %s: %s", url, fallback_exc)
+            logger.warning(
+                "Fallback HEAD (verify=False) fallito per %s: %s — provo TLS 1.2",
+                url,
+                fallback_exc,
+            )
+        # Tentativo 2: TLS 1.2
+        try:
+            session = requests.Session()
+            session.mount("https://", _Tls12Adapter())
+            response = session.head(
+                url, timeout=self.timeout, allow_redirects=True, **fallback_kwargs
+            )
+            session.close()
+            return HttpResult(response=response, err=None, ssl_fallback_used=True)
+        except requests.exceptions.RequestException as tls12_exc:
+            logger.warning("Fallback HEAD (TLS 1.2) fallito per %s: %s", url, tls12_exc)
             return HttpResult(
                 response=None,
-                err=HttpFallbackError(primary_error=primary_exc, fallback_error=fallback_exc),
+                err=HttpFallbackError(primary_error=primary_exc, fallback_error=tls12_exc),
                 ssl_fallback_used=False,
             )
         except Exception as exc:
@@ -414,8 +444,9 @@ class HttpClient:
         primary_exc: requests.exceptions.SSLError,
         kwargs: dict[str, Any],
     ) -> HttpResult:
-        """SSL fallback for GET — strips 'verify' from kwargs to avoid collision."""
+        """SSL fallback for GET — verify=False poi TLS 1.2."""
         fallback_kwargs = {k: v for k, v in kwargs.items() if k != "verify"}
+        # Tentativo 1: verify=False
         try:
             response = self._session.get(
                 url,
@@ -425,10 +456,24 @@ class HttpClient:
             )
             return HttpResult(response=response, err=None, ssl_fallback_used=True)
         except requests.exceptions.RequestException as fallback_exc:
-            logger.warning("Fallback GET also failed for %s: %s", url, fallback_exc)
+            logger.warning(
+                "Fallback GET (verify=False) fallito per %s: %s — provo TLS 1.2",
+                url,
+                fallback_exc,
+            )
+            primary_fallback = fallback_exc
+        # Tentativo 2: TLS 1.2 + verify=False (server PA che non supportano TLS 1.3)
+        try:
+            session = requests.Session()
+            session.mount("https://", _Tls12Adapter())
+            response = session.get(url, timeout=self.timeout, **fallback_kwargs)
+            session.close()
+            return HttpResult(response=response, err=None, ssl_fallback_used=True)
+        except requests.exceptions.RequestException as tls12_exc:
+            logger.warning("Fallback GET (TLS 1.2) fallito per %s: %s", url, tls12_exc)
             return HttpResult(
                 response=None,
-                err=HttpFallbackError(primary_error=primary_exc, fallback_error=fallback_exc),
+                err=HttpFallbackError(primary_error=primary_exc, fallback_error=primary_fallback),
                 ssl_fallback_used=False,
             )
         except Exception as exc:
