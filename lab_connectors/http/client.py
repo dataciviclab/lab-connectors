@@ -15,7 +15,6 @@ It wraps requests with:
 from __future__ import annotations
 
 import datetime
-import io
 import logging
 import os
 import random
@@ -77,13 +76,12 @@ class _SimpleResponse:
 
     def json(self) -> Any:
         import json as _json
+
         return _json.loads(self._content)
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
-            raise requests.exceptions.HTTPError(
-                f"{self.status_code} {self.reason}", response=self
-            )
+            raise requests.exceptions.HTTPError(f"{self.status_code} {self.reason}", response=self)
 
 
 class _Tls12Adapter(HTTPAdapter):
@@ -599,7 +597,14 @@ class HttpClient:
         if proxies:
             try:
                 session = self._tls12_session()
-                resp = session.post(url, data=data, json=json, timeout=self.timeout, proxies=proxies, **fallback_kwargs)
+                resp = session.post(
+                    url,
+                    data=data,
+                    json=json,
+                    timeout=self.timeout,
+                    proxies=proxies,
+                    **fallback_kwargs,
+                )
                 session.close()
                 return HttpResult(response=resp, err=None, ssl_fallback_used=True)
             except requests.exceptions.RequestException as proxy_exc:
@@ -628,9 +633,7 @@ class HttpClient:
         session.headers["User-Agent"] = self.user_agent
         return session
 
-    def _requests_tls12_proxy(
-        self, method: str, url: str, **kwargs: Any
-    ) -> HttpResult:
+    def _requests_tls12_proxy(self, method: str, url: str, **kwargs: Any) -> HttpResult:
         """GET/HEAD via TLS 1.2 + proxy."""
         proxies = self._resolve_fallback_proxies()
         if not proxies:
@@ -661,15 +664,15 @@ class HttpClient:
         try:
             ua = _rand_ua()
             result = subprocess.run(
-                [curl, "-k", "-sS", "-L", "--max-time", str(t),
-                 "-H", f"User-Agent: {ua}",
-                 url],
-                capture_output=True, timeout=t + self._CURL_TIMEOUT_MARGIN,
+                [curl, "-k", "-sS", "-L", "--max-time", str(t), "-H", f"User-Agent: {ua}", url],
+                capture_output=True,
+                timeout=t + self._CURL_TIMEOUT_MARGIN,
             )
             if result.returncode == 0 and len(result.stdout) > 0:
                 resp = _SimpleResponse(result.stdout, url=url)
                 return HttpResult(response=resp, err=None, ssl_fallback_used=True)
-            err_msg = result.stderr.decode("utf-8", errors="replace")[:200] or f"exit code {result.returncode}"
+            stderr_text = result.stderr.decode("utf-8", errors="replace")[:200]
+            err_msg = stderr_text or f"exit code {result.returncode}"
             return HttpResult(
                 response=None,
                 err=Exception(f"curl: {err_msg}"),
@@ -706,7 +709,8 @@ class HttpClient:
                 if attempt < 2:
                     time.sleep((attempt + 1) * 3)
         return HttpResult(
-            response=None, err=last_err or Exception("urllib exhausted"),
+            response=None,
+            err=last_err or Exception("urllib exhausted"),
             ssl_fallback_used=False,
         )
 
@@ -747,7 +751,9 @@ class HttpClient:
         except requests.exceptions.RequestException as exc:
             logger.warning(
                 "Fallback %s (TLS 1.2) fallito per %s: %s",
-                method, url, exc,
+                method,
+                url,
+                exc,
             )
             attempts_before.append(exc)
 
@@ -757,7 +763,8 @@ class HttpClient:
             return result
         logger.warning(
             "Fallback %s (TLS 1.2 + proxy) fallito per %s",
-            method, url,
+            method,
+            url,
         )
         if result.err:
             attempts_before.append(result.err)
@@ -782,7 +789,11 @@ class HttpClient:
             response=None,
             err=HttpFallbackError(
                 primary_error=primary_exc,
-                fallback_error=attempts_before[-1] if attempts_before else Exception("Tutti i fallback esauriti"),
+                fallback_error=(
+                    attempts_before[-1]
+                    if attempts_before
+                    else Exception("Tutti i fallback esauriti")
+                ),
             ),
             ssl_fallback_used=False,
         )
