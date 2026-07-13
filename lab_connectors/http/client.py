@@ -15,13 +15,17 @@ It wraps requests with:
 from __future__ import annotations
 
 import datetime
+import io
 import logging
 import os
 import random
+import shutil
 import ssl
+import subprocess
 import threading
 import time
 import urllib.parse
+import urllib.request
 from collections.abc import Callable
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -34,6 +38,52 @@ from urllib3.exceptions import InsecureRequestWarning
 from lab_connectors.http.types import CircuitOpenError, HttpFallbackError, HttpResult
 
 logger = logging.getLogger("lab_connectors.http")
+
+_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/134.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/604.1",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/133.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edge/134.0.0.0",
+]
+
+
+def _rand_ua() -> str:
+    return random.choice(_USER_AGENTS)
+
+
+class _SimpleResponse:
+    """Minimal ResponseLike wrapper per risultati da curl/urllib."""
+
+    def __init__(self, content: bytes, status_code: int = 200, url: str = ""):
+        self._content = content
+        self.status_code = status_code
+        self.url = url
+        self.reason = "OK" if status_code < 400 else "Error"
+        self.headers = {"Content-Type": "application/octet-stream"}
+        self._encoding = "utf-8"
+
+    @property
+    def content(self) -> bytes:
+        return self._content
+
+    @property
+    def text(self) -> str:
+        return self._content.decode(self._encoding, errors="replace")
+
+    @property
+    def ok(self) -> bool:
+        return self.status_code < 400
+
+    def json(self) -> Any:
+        import json as _json
+        return _json.loads(self._content)
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise requests.exceptions.HTTPError(
+                f"{self.status_code} {self.reason}", response=self
+            )
 
 
 class _Tls12Adapter(HTTPAdapter):
@@ -360,43 +410,27 @@ class HttpClient:
         primary_exc: requests.exceptions.SSLError,
         kwargs: dict[str, Any],
     ) -> HttpResult:
-        """SSL fallback for HEAD — verify=False poi TLS 1.2."""
-        fallback_kwargs = {
-            k: v for k, v in kwargs.items() if k not in ("headers", "allow_redirects")
-        }
+        """SSL fallback for HEAD — verify=False poi catena completa."""
+        fallback_kwargs = {k: v for k, v in kwargs.items() if k != "headers"}
+        fallback_kwargs.setdefault("allow_redirects", True)
+        _head_fb: Exception | None = None
         try:
             response = self._session.head(
                 url,
                 timeout=self.timeout,
-                allow_redirects=True,
                 verify=False,
                 **fallback_kwargs,
             )
             return HttpResult(response=response, err=None, ssl_fallback_used=True)
-        except requests.exceptions.RequestException as fallback_exc:
+        except requests.exceptions.RequestException as _exc:
+            _head_fb = _exc
             logger.warning(
-                "Fallback HEAD (verify=False) fallito per %s: %s — provo TLS 1.2",
+                "Fallback HEAD (verify=False) fallito per %s: %s — catena",
                 url,
-                fallback_exc,
+                _exc,
             )
-        # Tentativo 2: TLS 1.2
-        try:
-            session = requests.Session()
-            session.mount("https://", _Tls12Adapter())
-            response = session.head(
-                url, timeout=self.timeout, allow_redirects=True, **fallback_kwargs
-            )
-            session.close()
-            return HttpResult(response=response, err=None, ssl_fallback_used=True)
-        except requests.exceptions.RequestException as tls12_exc:
-            logger.warning("Fallback HEAD (TLS 1.2) fallito per %s: %s", url, tls12_exc)
-            return HttpResult(
-                response=None,
-                err=HttpFallbackError(primary_error=primary_exc, fallback_error=tls12_exc),
-                ssl_fallback_used=False,
-            )
-        except Exception as exc:
-            return HttpResult(response=None, err=exc, ssl_fallback_used=False)
+        attempts_before: list[Exception] = [_head_fb] if _head_fb else []
+        return self._run_fallback_chain(url, "HEAD", fallback_kwargs, primary_exc, attempts_before)
 
     # ------------------------------------------------------------------
     # GET
@@ -444,9 +478,10 @@ class HttpClient:
         primary_exc: requests.exceptions.SSLError,
         kwargs: dict[str, Any],
     ) -> HttpResult:
-        """SSL fallback for GET — verify=False poi TLS 1.2."""
+        """SSL fallback for GET — verify=False poi catena completa."""
         fallback_kwargs = {k: v for k, v in kwargs.items() if k != "verify"}
         # Tentativo 1: verify=False
+        _get_fb: Exception | None = None
         try:
             response = self._session.get(
                 url,
@@ -455,29 +490,15 @@ class HttpClient:
                 **fallback_kwargs,
             )
             return HttpResult(response=response, err=None, ssl_fallback_used=True)
-        except requests.exceptions.RequestException as fallback_exc:
+        except requests.exceptions.RequestException as _exc:
+            _get_fb = _exc
             logger.warning(
-                "Fallback GET (verify=False) fallito per %s: %s — provo TLS 1.2",
+                "Fallback GET (verify=False) fallito per %s: %s — catena",
                 url,
-                fallback_exc,
+                _exc,
             )
-            primary_fallback = fallback_exc
-        # Tentativo 2: TLS 1.2 + verify=False (server PA che non supportano TLS 1.3)
-        try:
-            session = requests.Session()
-            session.mount("https://", _Tls12Adapter())
-            response = session.get(url, timeout=self.timeout, **fallback_kwargs)
-            session.close()
-            return HttpResult(response=response, err=None, ssl_fallback_used=True)
-        except requests.exceptions.RequestException as tls12_exc:
-            logger.warning("Fallback GET (TLS 1.2) fallito per %s: %s", url, tls12_exc)
-            return HttpResult(
-                response=None,
-                err=HttpFallbackError(primary_error=primary_exc, fallback_error=primary_fallback),
-                ssl_fallback_used=False,
-            )
-        except Exception as exc:
-            return HttpResult(response=None, err=exc, ssl_fallback_used=False)
+        attempts_before: list[Exception] = [_get_fb] if _get_fb else []
+        return self._run_fallback_chain(url, "GET", fallback_kwargs, primary_exc, attempts_before)
 
     # ------------------------------------------------------------------
     # POST
@@ -542,8 +563,10 @@ class HttpClient:
         primary_exc: requests.exceptions.SSLError,
         kwargs: dict[str, Any],
     ) -> HttpResult:
-        """SSL fallback for POST — strips 'verify' from kwargs."""
+        """SSL fallback for POST — verify=False poi TLS 1.2 poi proxy."""
         fallback_kwargs = {k: v for k, v in kwargs.items() if k != "verify"}
+        # Tentativo 1: verify=False
+        _post_fb: Exception | None = None
         try:
             response = self._session.post(
                 url,
@@ -554,15 +577,215 @@ class HttpClient:
                 **fallback_kwargs,
             )
             return HttpResult(response=response, err=None, ssl_fallback_used=True)
-        except requests.exceptions.RequestException as fallback_exc:
-            logger.warning("Fallback POST also failed for %s: %s", url, fallback_exc)
+        except requests.exceptions.RequestException as _exc:
+            _post_fb = _exc
+            logger.warning(
+                "Fallback POST (verify=False) fallito per %s: %s — provo TLS 1.2",
+                url,
+                _exc,
+            )
+        # Tentativo 2: TLS 1.2
+        attempts_before: list[Exception] = [_post_fb] if _post_fb else []
+        try:
+            session = self._tls12_session()
+            resp = session.post(url, data=data, json=json, timeout=self.timeout, **fallback_kwargs)
+            session.close()
+            return HttpResult(response=resp, err=None, ssl_fallback_used=True)
+        except requests.exceptions.RequestException as tls12_exc:
+            logger.warning("Fallback POST (TLS 1.2) fallito per %s: %s", url, tls12_exc)
+            attempts_before.append(tls12_exc)
+        # Tentativo 3: TLS 1.2 + proxy
+        proxies = self._resolve_fallback_proxies()
+        if proxies:
+            try:
+                session = self._tls12_session()
+                resp = session.post(url, data=data, json=json, timeout=self.timeout, proxies=proxies, **fallback_kwargs)
+                session.close()
+                return HttpResult(response=resp, err=None, ssl_fallback_used=True)
+            except requests.exceptions.RequestException as proxy_exc:
+                logger.warning("Fallback POST (TLS 1.2 + proxy) fallito per %s", url)
+                attempts_before.append(proxy_exc)
+        # Tentativo 4: curl -k (solo GET-like, per POST usiamo solo requests)
+        return HttpResult(
+            response=None,
+            err=HttpFallbackError(
+                primary_error=primary_exc,
+                fallback_error=attempts_before[-1],
+            ),
+            ssl_fallback_used=False,
+        )
+
+    # ------------------------------------------------------------------
+    # Fallback extra: curl e urllib
+    # ------------------------------------------------------------------
+
+    _CURL_TIMEOUT_MARGIN = 10
+
+    def _tls12_session(self) -> requests.Session:
+        """Create a session with TLS 1.2 forced."""
+        session = requests.Session()
+        session.mount("https://", _Tls12Adapter())
+        session.headers["User-Agent"] = self.user_agent
+        return session
+
+    def _requests_tls12_proxy(
+        self, method: str, url: str, **kwargs: Any
+    ) -> HttpResult:
+        """GET/HEAD via TLS 1.2 + proxy."""
+        proxies = self._resolve_fallback_proxies()
+        if not proxies:
             return HttpResult(
                 response=None,
-                err=HttpFallbackError(primary_error=primary_exc, fallback_error=fallback_exc),
+                err=Exception("Nessun proxy configurato"),
+                ssl_fallback_used=False,
+            )
+        try:
+            session = self._tls12_session()
+            fn = getattr(session, method.lower())
+            resp = fn(url, timeout=self.timeout, proxies=proxies, **kwargs)
+            session.close()
+            return HttpResult(response=resp, err=None, ssl_fallback_used=True)
+        except requests.exceptions.RequestException as exc:
+            return HttpResult(response=None, err=exc, ssl_fallback_used=False)
+
+    def _via_curl(self, url: str, timeout: int | None = None) -> HttpResult:
+        """Download via curl -k -L."""
+        curl = shutil.which("curl")
+        if not curl:
+            return HttpResult(
+                response=None,
+                err=Exception("curl non disponibile"),
+                ssl_fallback_used=False,
+            )
+        t = timeout or self._default_timeout()
+        try:
+            ua = _rand_ua()
+            result = subprocess.run(
+                [curl, "-k", "-sS", "-L", "--max-time", str(t),
+                 "-H", f"User-Agent: {ua}",
+                 url],
+                capture_output=True, timeout=t + self._CURL_TIMEOUT_MARGIN,
+            )
+            if result.returncode == 0 and len(result.stdout) > 0:
+                resp = _SimpleResponse(result.stdout, url=url)
+                return HttpResult(response=resp, err=None, ssl_fallback_used=True)
+            err_msg = result.stderr.decode("utf-8", errors="replace")[:200] or f"exit code {result.returncode}"
+            return HttpResult(
+                response=None,
+                err=Exception(f"curl: {err_msg}"),
                 ssl_fallback_used=False,
             )
         except Exception as exc:
             return HttpResult(response=None, err=exc, ssl_fallback_used=False)
+
+    def _via_urllib(self, url: str, timeout: int | None = None) -> HttpResult:
+        """Download via urllib + TLSv1.2 + User-Agent random."""
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+        t = timeout or self._default_timeout()
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "User-Agent": _rand_ua(),
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=t, context=ctx) as r:
+                    content = r.read()
+                    resp = _SimpleResponse(content, url=url)
+                    return HttpResult(response=resp, err=None, ssl_fallback_used=True)
+            except Exception as exc:
+                last_err = exc
+                if attempt < 2:
+                    time.sleep((attempt + 1) * 3)
+        return HttpResult(
+            response=None, err=last_err or Exception("urllib exhausted"),
+            ssl_fallback_used=False,
+        )
+
+    @staticmethod
+    def _default_timeout() -> int:
+        return 120
+
+    # ------------------------------------------------------------------
+    # Catena di fallback condivisa per GET/HEAD
+    # ------------------------------------------------------------------
+
+    def _run_fallback_chain(
+        self,
+        url: str,
+        method: str,
+        kwargs: dict[str, Any],
+        primary_exc: Exception,
+        attempts_before: list[Exception],
+    ) -> HttpResult:
+        """Esegue la catena di fallback per GET/HEAD.
+
+        Ordine:
+          1. requests verify=False (gia' tentato prima, non replicato qui)
+          2. requests TLS 1.2
+          3. requests TLS 1.2 + proxy
+          4. curl -k
+          5. urllib TLS 1.2
+        """
+        fallback_kwargs = {k: v for k, v in kwargs.items() if k != "verify"}
+
+        # --- 2: TLS 1.2 ---
+        try:
+            session = self._tls12_session()
+            fn = getattr(session, method.lower())
+            resp = fn(url, timeout=self.timeout, **fallback_kwargs)
+            session.close()
+            return HttpResult(response=resp, err=None, ssl_fallback_used=True)
+        except requests.exceptions.RequestException as exc:
+            logger.warning(
+                "Fallback %s (TLS 1.2) fallito per %s: %s",
+                method, url, exc,
+            )
+            attempts_before.append(exc)
+
+        # --- 3: TLS 1.2 + proxy ---
+        result = self._requests_tls12_proxy(method, url, **fallback_kwargs)
+        if result.is_ok:
+            return result
+        logger.warning(
+            "Fallback %s (TLS 1.2 + proxy) fallito per %s",
+            method, url,
+        )
+        if result.err:
+            attempts_before.append(result.err)
+
+        # --- 4: curl -k ---
+        result = self._via_curl(url)
+        if result.is_ok:
+            return result
+        logger.warning("Fallback %s (curl) fallito per %s", method, url)
+        if result.err:
+            attempts_before.append(result.err)
+
+        # --- 5: urllib TLS 1.2 ---
+        result = self._via_urllib(url)
+        if result.is_ok:
+            return result
+        logger.warning("Fallback %s (urllib) fallito per %s", method, url)
+        if result.err:
+            attempts_before.append(result.err)
+
+        return HttpResult(
+            response=None,
+            err=HttpFallbackError(
+                primary_error=primary_exc,
+                fallback_error=attempts_before[-1] if attempts_before else Exception("Tutti i fallback esauriti"),
+            ),
+            ssl_fallback_used=False,
+        )
 
     # ------------------------------------------------------------------
     # Helpers
