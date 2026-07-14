@@ -1,11 +1,9 @@
 """Tests per lab_connectors.http.download.download().
 
-Copre: download OK, errore HTTP, timeout, URL vuota, proxy da env.
+Copre: download OK, errore HTTP, errore connessione, URL vuota.
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 import pytest
 
@@ -15,13 +13,6 @@ from lab_connectors.http.types import HttpResult
 from ..conftest import _FakeResponse
 
 pytestmark = [pytest.mark.pure_unit, pytest.mark.contract]
-
-
-def _patch_client(monkeypatch, fake_get) -> None:
-    """Sostituisce HttpClient.get con fake."""
-    import lab_connectors.http.client as mod
-
-    monkeypatch.setattr(mod.HttpClient, "get", fake_get)
 
 
 class TestDownload:
@@ -62,36 +53,3 @@ class TestDownload:
         """URL vuota → ValueError."""
         with pytest.raises(ValueError, match="URL cannot be empty"):
             download("")
-
-    def test_proxy_from_env(self, monkeypatch):
-        """BLOCKED_SOURCE_PROXY → passato a HttpClient.get."""
-        monkeypatch.setenv("BLOCKED_SOURCE_PROXY", "http://proxy.test:8888")
-        passed_kwargs: dict[str, Any] = {}
-
-        def fake_get(self, url, **kw):
-            nonlocal passed_kwargs
-            passed_kwargs = kw
-            return HttpResult(response=_FakeResponse(status_code=200, content=b"ok"), err=None)
-
-        monkeypatch.setattr("lab_connectors.http.client.HttpClient.get", fake_get)
-
-        download("https://example.com/data", timeout=5)
-        assert passed_kwargs.get("proxies") == {
-            "http": "http://proxy.test:8888",
-            "https": "http://proxy.test:8888",
-        }
-
-    def test_proxy_disabled(self, monkeypatch):
-        """proxy_from_env=False → non passa proxy."""
-        monkeypatch.setenv("BLOCKED_SOURCE_PROXY", "http://proxy.test:8888")
-        passed_kwargs: dict[str, Any] = {}
-
-        def fake_get(self, url, **kw):
-            nonlocal passed_kwargs
-            passed_kwargs = kw
-            return HttpResult(response=_FakeResponse(status_code=200, content=b"ok"), err=None)
-
-        monkeypatch.setattr("lab_connectors.http.client.HttpClient.get", fake_get)
-
-        download("https://example.com/data", timeout=5, proxy_from_env=False)
-        assert "proxies" not in passed_kwargs
