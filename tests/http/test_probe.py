@@ -16,6 +16,8 @@ from lab_connectors.http.types import HttpResult
 
 from ..conftest import _FakeResponse
 
+pytestmark = pytest.mark.pure_unit
+
 
 def _result(response: Any = None, err: Exception | None = None) -> HttpResult:
     """Costruisce un HttpResult come il vero costruttore."""
@@ -102,6 +104,7 @@ class TestProbeUrlHeaders:
         result = probe_url_headers("https://example.com/data", client=mock_client)
         assert result["status_code"] == 400
 
+    @pytest.mark.adapter
     def test_https_fallback_when_http_fails(self, mock_client):
         """http:// → se fallisce (nessuna risposta), riprova https://.
 
