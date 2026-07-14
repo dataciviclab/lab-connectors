@@ -6,6 +6,8 @@ Retry and SSL fallback logic is tested through mocked exceptions.
 
 from __future__ import annotations
 
+import io
+import subprocess
 import time
 from typing import Any
 
@@ -13,7 +15,7 @@ import pytest
 import requests
 
 from lab_connectors.http import HttpClient
-from lab_connectors.http.types import HttpFallbackError
+from lab_connectors.http.types import HttpFallbackError, HttpResult
 
 from ..conftest import _FakeResponse
 
@@ -296,7 +298,10 @@ def test_proxy_fallback_on_403(
         if call_count == 1:
             return _FakeResponse(403, b"blocked")
         # Second call: verify proxy was passed
-        assert kwargs.get("proxies") == {"http": "http://proxy.test:8888", "https": "http://proxy.test:8888"}
+        assert kwargs.get("proxies") == {
+            "http": "http://proxy.test:8888",
+            "https": "http://proxy.test:8888",
+        }
         return _FakeResponse(200, b"ok")
 
     monkeypatch.setattr(requests, method, fake_request)
@@ -331,3 +336,126 @@ def test_proxy_fallback_skipped_when_not_configured(monkeypatch: pytest.MonkeyPa
     assert result.response is not None
     assert result.response.status_code == 403
     assert call_count == 1  # no retry, no proxy fallback
+
+
+# ---------------------------------------------------------------------------
+# Fallback extra: curl
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.contract
+def test_via_curl_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    """curl disponibile e subprocess torna exit 0 → HttpResult ok."""
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/curl" if name == "curl" else None)
+
+    def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess:
+        return subprocess.CompletedProcess(args[0], 0, stdout=b"curl content", stderr=b"")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    client = HttpClient()
+    result = client._via_curl("https://example.test/file.csv")
+
+    assert result.is_ok
+    assert result.response is not None
+    assert result.response.content == b"curl content"
+    assert result.ssl_fallback_used is True
+
+
+@pytest.mark.contract
+def test_via_curl_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """curl non installato → HttpResult con errore."""
+    monkeypatch.setattr("shutil.which", lambda name: None)
+
+    client = HttpClient()
+    result = client._via_curl("https://example.test/file.csv")
+
+    assert result.is_error
+    assert "curl non disponibile" in str(result.err).lower()
+
+
+# ---------------------------------------------------------------------------
+# Fallback extra: urllib
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.contract
+def test_via_urllib_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    """urllib.urlopen torna contenuto → HttpResult ok."""
+    fake_resp = io.BytesIO(b"urllib content")
+
+    def fake_urlopen(req: Any, timeout: Any = None, context: Any = None) -> Any:
+        return fake_resp
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    client = HttpClient()
+    result = client._via_urllib("https://example.test/file.csv")
+
+    assert result.is_ok
+    assert result.response is not None
+    assert result.response.content == b"urllib content"
+    assert result.ssl_fallback_used is True
+
+
+@pytest.mark.contract
+def test_via_urllib_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """2 fallimenti poi 1 successo → HttpResult ok al terzo tentativo."""
+    attempts: list[int] = []
+
+    class FakeUrlopen:
+        def __call__(self, req: Any, timeout: Any = None, context: Any = None) -> Any:
+            attempts.append(len(attempts))
+            if len(attempts) < 3:
+                raise Exception(f"timeout attempt {len(attempts)}")
+            return io.BytesIO(b"urllib after retry")
+
+    monkeypatch.setattr("urllib.request.urlopen", FakeUrlopen())
+
+    client = HttpClient()
+    result = client._via_urllib("https://example.test/file.csv")
+
+    assert result.is_ok
+    assert result.response is not None
+    assert result.response.content == b"urllib after retry"
+    assert result.ssl_fallback_used is True
+    assert len(attempts) == 3
+
+
+# ---------------------------------------------------------------------------
+# Fallback chain: tutti falliscono
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.contract
+def test_fallback_chain_all_fail(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tutte le strategie falliscono → HttpResult con HttpFallbackError."""
+    # Disabilita curl e urllib
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    monkeypatch.setattr(
+        "lab_connectors.http.client.HttpClient._via_urllib",
+        lambda self, url, timeout=None: HttpResult(
+            response=None, err=Exception("urllib fail"), ssl_fallback_used=False
+        ),
+    )
+
+    # Mock TLS 1.2 session per farlo fallire
+    class FakeSession:
+        def get(self, url: str, **kwargs: Any) -> Any:
+            raise requests.exceptions.ConnectionError("TLS 1.2 fail")
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "lab_connectors.http.client.HttpClient._tls12_session", lambda self: FakeSession()
+    )
+
+    client = HttpClient()
+    # SSL error diretto → parte la catena di fallback
+    result = client._run_fallback_chain(
+        "https://example.test/fail", "GET", {}, Exception("primary SSL fail"), []
+    )
+
+    assert result.is_error
+    assert result.ssl_fallback_used is False
