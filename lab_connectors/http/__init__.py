@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from lab_connectors.http.client import HttpClient
+from lab_connectors.http.download import download
 from lab_connectors.http.sparql import (
     discover_graphs,
     execute_sparql,
@@ -13,6 +14,7 @@ __all__ = [
     "HttpClient",
     "HttpFallbackError",
     "HttpResult",
+    "download",
     "execute_sparql",
     "discover_graphs",
     "infer_schema",
