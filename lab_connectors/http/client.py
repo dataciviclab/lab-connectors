@@ -81,7 +81,7 @@ class _SimpleResponse:
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
-            raise requests.exceptions.HTTPError(f"{self.status_code} {self.reason}", response=self)
+            raise requests.exceptions.HTTPError(f"{self.status_code} {self.reason}", response=self)  # type: ignore[arg-type]
 
 
 class _Tls12Adapter(HTTPAdapter):
