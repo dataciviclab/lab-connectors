@@ -18,11 +18,16 @@ class _FakeResponse:
     """
 
     def __init__(
-        self, status_code: int = 200, content: bytes = b"ok", headers: dict[str, str] | None = None
+        self,
+        status_code: int = 200,
+        content: bytes = b"ok",
+        headers: dict[str, str] | None = None,
+        url: str = "",
     ) -> None:
         self.status_code = status_code
         self.content = content
         self.headers = headers or {}
+        self.url = url
 
     def json(self) -> dict:
         import json
