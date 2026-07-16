@@ -198,6 +198,14 @@ class HttpClient:
         with self._cb_lock:
             return self._cb_consecutive.get(host, 0) >= self._circuit_threshold
 
+    def circuit_is_open(self, url: str) -> bool:
+        """Check if the circuit breaker is open for a given URL's host.
+
+        Returns True if the host is currently blocked.
+        Public alternative to ``_circuit_should_block`` for external callers.
+        """
+        return self._circuit_should_block(url)
+
     def _circuit_after_result(self, url: str, result: HttpResult) -> None:
         """Update circuit state after a request completes."""
         if self._circuit_threshold <= 0:
