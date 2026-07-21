@@ -153,16 +153,28 @@ def list_objects(
             for b in blobs
         ]
 
-    # auth=False: solo HTTP API, niente SDK
+    # auth=False: solo HTTP API, niente SDK (paginazione completa)
     if auth is False:
-        items, _ = _gcs_http_list(bucket, prefix, limit, page_token)
+        all_items: list[dict[str, Any]] = []
+        token = page_token
+        remaining = limit
+        while True:
+            page_limit = remaining if remaining is not None else None
+            page_items, token = _gcs_http_list(bucket, prefix, page_limit, token)
+            all_items.extend(page_items)
+            if not token:
+                break
+            if remaining is not None:
+                remaining -= len(page_items)
+                if remaining <= 0:
+                    break
         return [
             {
                 "name": item["name"],
                 "size": int(item.get("size", 0)),
                 "updated": item.get("updated"),
             }
-            for item in items
+            for item in all_items
         ]
 
     # auth=None (auto): prova SDK, fallback HTTP con paginazione completa
