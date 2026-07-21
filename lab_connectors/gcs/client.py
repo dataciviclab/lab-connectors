@@ -201,7 +201,7 @@ def list_objects(
         ]
 
     # Fallback HTTP con paginazione
-    all_items: list[dict[str, Any]] = []
+    all_items = []
     token = page_token
     remaining = limit
     while True:
