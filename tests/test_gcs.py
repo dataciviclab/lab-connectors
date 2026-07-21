@@ -307,5 +307,89 @@ class GcsHttpPaginationTest(unittest.TestCase):
         self.assertEqual(results[0]["name"], "p1_0.parquet")
 
 
+class GcsHttpAuthFalsePaginationTest(unittest.TestCase):
+    """Test per la paginazione HTTP con auth=False (ramo modificato dalla PR).
+
+    Questi test coprono il ramo ``auth=False`` che la PR ha fixato aggiungendo
+    la paginazione completa. Il ramo ``auth=None`` fallback ha test separati
+    in ``GcsHttpPaginationTest``.
+    """
+
+    @patch("urllib.request.urlopen")
+    def test_auth_false_no_pagination(self, mock_urlopen):
+        """auth=False, pagina singola."""
+        import json
+        from io import BytesIO
+
+        def fake_open(url, **kw):
+            data = {
+                "items": [{"name": "a.parquet", "size": "100", "updated": "2026-01-01T00:00:00Z"}]
+            }
+            result = BytesIO(json.dumps(data).encode())
+            result.status = 200
+            return result
+
+        mock_urlopen.side_effect = fake_open
+
+        results = list_objects("test-bucket", prefix="", auth=False)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "a.parquet")
+
+    @patch("urllib.request.urlopen")
+    def test_auth_false_with_pagination(self, mock_urlopen):
+        """auth=False con paginazione: 2 pagine."""
+        import json
+        from io import BytesIO
+
+        page_count = [0]  # mutable per closure
+
+        def fake_open(url, **kw):
+            page_count[0] += 1
+            if page_count[0] == 1:
+                items = [
+                    {"name": f"p1_{i}.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
+                    for i in range(3)
+                ]
+                data = {"items": items, "nextPageToken": "token-p2"}
+            else:
+                data = {
+                    "items": [
+                        {"name": "p2_0.parquet", "size": "20", "updated": "2026-01-01T00:00:00Z"}
+                    ]
+                }
+            result = BytesIO(json.dumps(data).encode())
+            result.status = 200
+            return result
+
+        mock_urlopen.side_effect = fake_open
+
+        results = list_objects("test-bucket", prefix="", auth=False)
+        self.assertEqual(len(results), 4, "dovrebbe unire 3 + 1 = 4 oggetti da 2 pagine")
+        self.assertIn("p1_0.parquet", [r["name"] for r in results])
+        self.assertIn("p2_0.parquet", [r["name"] for r in results])
+
+    @patch("urllib.request.urlopen")
+    def test_auth_false_with_limit(self, mock_urlopen):
+        """auth=False con limit: paginazione interrotta al raggiungimento del limite."""
+        import json
+        from io import BytesIO
+
+        def fake_open(url, **kw):
+            items = [
+                {"name": f"p1_{i}.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
+                for i in range(3)
+            ]
+            data = {"items": items, "nextPageToken": "token-p2"}
+            result = BytesIO(json.dumps(data).encode())
+            result.status = 200
+            return result
+
+        mock_urlopen.side_effect = fake_open
+
+        results = list_objects("test-bucket", prefix="", limit=1, auth=False)
+        self.assertEqual(len(results), 1, "limit=1 deve fermarsi dopo 1 oggetto")
+        self.assertEqual(results[0]["name"], "p1_0.parquet")
+
+
 if __name__ == "__main__":
     unittest.main()
