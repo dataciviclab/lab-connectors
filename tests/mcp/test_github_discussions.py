@@ -18,7 +18,7 @@ SERVER_DIR = Path(__file__).resolve().parents[2] / "mcp_servers" / "github-discu
 if str(SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(SERVER_DIR))
 
-from github_discussions_client import (  # noqa: E402
+from github_discussions_client import (
     _GITHUB_TOKEN_ENV_VARS,
     GitHubDiscussionsClientError,
     _get_token,
@@ -30,7 +30,7 @@ from github_discussions_client import (  # noqa: E402
     list_discussions,
     search_discussions,
 )
-from server import mcp  # noqa: E402
+from server import mcp
 
 # ── fixtures ──────────────────────────────────────────────────────────
 

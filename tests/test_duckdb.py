@@ -1,4 +1,3 @@
-# ruff: noqa: E402
 """Tests per lab_connectors.duckdb.
 
 ``duckdb`` è extra opzionale ``[duckdb]`` — se non installato,
