@@ -1,4 +1,3 @@
-# ruff: noqa: E402, I001
 """Tests per lab_connectors.duckdb.
 
 ``duckdb`` è extra opzionale ``[duckdb]`` — se non installato,
@@ -14,6 +13,7 @@ import pytest
 pytest.importorskip("duckdb")
 
 import duckdb
+
 from lab_connectors.duckdb import gcs_connect, safe_connect
 
 pytestmark = pytest.mark.contract
@@ -56,9 +56,8 @@ class TestSafeConnectErrors:
 
     def test_invalid_path_raises(self) -> None:
         """Path invalido solleva eccezione DuckDB."""
-        with pytest.raises(duckdb.IOException):
-            with safe_connect("/nonexistent/dir/db.duckdb"):
-                pass
+        with pytest.raises(duckdb.IOException), safe_connect("/nonexistent/dir/db.duckdb"):
+            pass
 
     def test_query_error_propagates(self) -> None:
         """Errore SQL propaga eccezione originale."""
@@ -69,10 +68,9 @@ class TestSafeConnectErrors:
     def test_error_closes_connection(self) -> None:
         """Errore nel context manager chiude comunque la connessione."""
         con_ref = None
-        with pytest.raises(duckdb.ParserException):
-            with safe_connect(":memory:") as con:
-                con_ref = con
-                con.execute("INVALID SQL")
+        with pytest.raises(duckdb.ParserException), safe_connect(":memory:") as con:
+            con_ref = con
+            con.execute("INVALID SQL")
         # La connessione deve essere chiusa
         with pytest.raises(duckdb.ConnectionException):
             con_ref.execute("SELECT 1")
@@ -95,13 +93,15 @@ class TestSafeConnectErrors:
             original_close(self_conn)
             raise RuntimeError("simulated close failure")
 
-        with unittest.mock.patch.object(
-            duckdb.DuckDBPyConnection,
-            "close",
-            _broken_close,
+        with (
+            unittest.mock.patch.object(
+                duckdb.DuckDBPyConnection,
+                "close",
+                _broken_close,
+            ),
+            safe_connect(":memory:") as con,
         ):
-            with safe_connect(":memory:") as con:
-                con.execute("SELECT 1")
+            con.execute("SELECT 1")
         # Il test passa se non c'e' eccezione — siamo usciti dal context manager
 
     def test_already_closed_connection_is_silent(self) -> None:

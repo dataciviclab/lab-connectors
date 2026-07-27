@@ -113,7 +113,7 @@ def gcs_connect(
 
     """
     s = str(path)
-    needs_httpfs = s.startswith("s3://") or s.startswith("s3:/")
+    needs_httpfs = s.startswith(("s3://", "s3:/"))
     if needs_httpfs:
         with safe_connect(database=database, extensions=["httpfs"], config=GCS_S3_CONFIG) as con:
             yield con

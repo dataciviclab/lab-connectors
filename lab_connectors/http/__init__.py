@@ -14,8 +14,8 @@ __all__ = [
     "HttpClient",
     "HttpFallbackError",
     "HttpResult",
+    "discover_graphs",
     "download",
     "execute_sparql",
-    "discover_graphs",
     "infer_schema",
 ]

@@ -15,7 +15,6 @@ THIS_DIR = Path(__file__).resolve().parent
 if str(THIS_DIR) not in sys.path:
     sys.path.insert(0, str(THIS_DIR))
 
-# ruff: noqa: E402
 from github_discussions_client import (
     add_discussion_comment as add_discussion_comment_impl,
 )

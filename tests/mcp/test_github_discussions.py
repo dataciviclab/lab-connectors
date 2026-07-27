@@ -18,7 +18,7 @@ SERVER_DIR = Path(__file__).resolve().parents[2] / "mcp_servers" / "github-discu
 if str(SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(SERVER_DIR))
 
-from github_discussions_client import (  # noqa: E402
+from github_discussions_client import (
     _GITHUB_TOKEN_ENV_VARS,
     GitHubDiscussionsClientError,
     _get_token,
@@ -30,7 +30,7 @@ from github_discussions_client import (  # noqa: E402
     list_discussions,
     search_discussions,
 )
-from server import mcp  # noqa: E402
+from server import mcp
 
 # ── fixtures ──────────────────────────────────────────────────────────
 
@@ -245,7 +245,7 @@ class TestListDiscussions:
 
         Se la pagina contiene discussioni di altre categorie, vengono escluse.
         """
-        calls, resp = mock_graphql
+        _calls, resp = mock_graphql
         nodes = [
             {**_FAKE_DISCUSSION_NODE, "number": 1, "category": {"name": "Ideas"}},
             {**_FAKE_DISCUSSION_NODE_OPEN, "number": 2, "category": {"name": "Q&A"}},
@@ -277,7 +277,7 @@ class TestListDiscussions:
 
     @pytest.mark.adapter
     def test_empty_response(self, mock_graphql):
-        calls, resp = mock_graphql
+        _calls, resp = mock_graphql
         resp["data"] = {
             "repository": {"discussions": {"totalCount": 0, "pageInfo": {}, "nodes": []}}
         }
@@ -288,7 +288,7 @@ class TestListDiscussions:
 
     @pytest.mark.adapter
     def test_error_from_graphql(self, mock_graphql):
-        calls, resp = mock_graphql
+        _calls, resp = mock_graphql
         resp["error"] = "NOT_FOUND"
 
         with pytest.raises(GitHubDiscussionsClientError, match="NOT_FOUND"):
@@ -345,7 +345,7 @@ class TestSearchDiscussions:
 
     @pytest.mark.adapter
     def test_search_error(self, mock_graphql):
-        calls, resp = mock_graphql
+        _calls, resp = mock_graphql
         resp["error"] = "RATE_LIMITED"
 
         with pytest.raises(GitHubDiscussionsClientError, match="RATE_LIMITED"):
@@ -359,7 +359,7 @@ class TestSearchDiscussions:
 class TestGetDiscussion:
     @pytest.mark.adapter
     def test_full_mode_returns_body(self, mock_graphql):
-        calls, resp = mock_graphql
+        _calls, resp = mock_graphql
         resp["data"] = {
             "repository": {
                 "discussion": {
@@ -378,7 +378,7 @@ class TestGetDiscussion:
 
     @pytest.mark.adapter
     def test_summary_truncates_body(self, mock_graphql):
-        calls, resp = mock_graphql
+        _calls, resp = mock_graphql
         resp["data"] = {
             "repository": {
                 "discussion": {
@@ -399,7 +399,7 @@ class TestGetDiscussion:
 class TestGetDiscussionComments:
     @pytest.mark.adapter
     def test_returns_comments(self, mock_graphql):
-        calls, resp = mock_graphql
+        _calls, resp = mock_graphql
         resp["data"] = {
             "repository": {
                 "discussion": {

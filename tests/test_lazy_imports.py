@@ -27,11 +27,11 @@ class TestRootLazyExports:
     def test_import_connector_submodules_without_fastmcp(self) -> None:
         """Submodules like cache and errors should NOT trigger FastMCP."""
         # Fresh check — FastMCP may have been loaded by previous tests
-        import lab_connectors.mcp.cache  # noqa: F401
-        import lab_connectors.mcp.errors  # noqa: F401
+        import lab_connectors.mcp.cache as _cache
+        import lab_connectors.mcp.errors as _errors
 
-        # These should work without FastMCP
-        assert True
+        assert _cache is not None
+        assert _errors is not None
 
     def test_create_mcp_server_import_is_lazy(self) -> None:
         """Importing create_mcp_server should NOT load FastMCP."""

@@ -52,15 +52,35 @@ line-length = 100
 
 [tool.ruff.lint]
 extend-select = ["I", "UP", "B", "C4", "D", "E501"]
-ignore = ["D203", "D213"]
+ignore = [
+    "D203", "D213",
+    # Intenzionali — except Exception generico in production code
+    "BLE001", "S110",
+    # Script con shebang non eseguibili (.github/scripts/)
+    "EXE001",
+    # G201: McpLogger non ha .exception()
+    "G201",
+    # Scelte di design su annotazioni tipo
+    "PYI034", "PYI041", "RUF012",
+    # Blocco TYPE_CHECKING vuoto ma leggibile
+    "TC005",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "lab_connectors/__init__.py" = ["D104"]
 "lab_connectors/http/__init__.py" = ["D104"]
 "lab_connectors/mcp/__init__.py" = ["D104"]
-"lab_connectors/gcs/__init__.py" = ["D104"]
+"lab_connectors/gcs/__init__.py" = ["D104", "RUF022"]
 "lab_connectors/duckdb/__init__.py" = ["D104"]
-"tests/**" = ["D"]
+"tests/**" = [
+    "D",
+    # Test usano Exception generico volutamente
+    "TRY002",
+    # Custom logger API con kwargs extra
+    "PLE1205",
+    # nested with più leggibile nei test
+    "SIM117",
+]
 "lab_connectors/http/types.py" = ["D105"]
 
 [tool.mypy]
