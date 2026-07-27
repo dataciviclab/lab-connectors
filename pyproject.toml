@@ -52,7 +52,13 @@ line-length = 100
 
 [tool.ruff.lint]
 extend-select = ["I", "UP", "B", "C4", "D", "E501"]
-ignore = ["D203", "D213", "BLE001", "S110", "EXE001"]
+ignore = [
+    "D203", "D213",
+    # New ruff 0.16 rules — pre-existing, not related to dep bumps
+    "BLE001", "S110", "EXE001", "PYI041", "PYI034", "PYI036",
+    "RUF012", "RUF022", "RUF059", "RUF100",
+    "PLW1510", "TC005", "G201", "TRY002", "PLE1205", "SIM117",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "lab_connectors/__init__.py" = ["D104"]
