@@ -114,6 +114,6 @@ class GenericPool:
         """Enter context manager — returns self."""
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         """Exit context manager — calls close()."""
         self.close()

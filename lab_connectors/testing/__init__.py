@@ -117,7 +117,7 @@ class FakeHttpClient:
         """Enter context manager — returns self (no-op)."""
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         """Exit context manager — calls close() (no-op)."""
         self.close()
 
@@ -241,7 +241,7 @@ class _FakeResponse:
         for i in range(0, len(data), chunk_size):
             yield data[i : i + chunk_size]
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         """Exit context manager — no-op."""
 
     def __repr__(self) -> str:

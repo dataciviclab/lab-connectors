@@ -167,7 +167,7 @@ class HttpClient:
         """Return self for use as a context manager."""
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         """Close the session when exiting the context manager."""
         self.close()
 
@@ -674,6 +674,7 @@ class HttpClient:
             result = subprocess.run(
                 [curl, "-k", "-sS", "-L", "--max-time", str(t), "-H", f"User-Agent: {ua}", url],
                 capture_output=True,
+                check=False,
                 timeout=t + self._CURL_TIMEOUT_MARGIN,
             )
             if result.returncode == 0 and len(result.stdout) > 0:

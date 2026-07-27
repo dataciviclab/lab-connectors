@@ -54,19 +54,31 @@ line-length = 100
 extend-select = ["I", "UP", "B", "C4", "D", "E501"]
 ignore = [
     "D203", "D213",
-    # New ruff 0.16 rules — pre-existing, not related to dep bumps
-    "BLE001", "S110", "EXE001", "PYI041", "PYI034", "PYI036",
-    "RUF012", "RUF022", "RUF059", "RUF100",
-    "PLW1510", "TC005", "G201", "TRY002", "PLE1205", "SIM117",
+    # Intenzionali — except Exception generico in production code
+    "BLE001", "S110",
+    # Script con shebang non eseguibili (.github/scripts/)
+    "EXE001",
+    # Scelte di design su annotazioni tipo
+    "PYI034", "PYI041", "RUF012",
+    # Blocco TYPE_CHECKING vuoto ma leggibile
+    "TC005",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "lab_connectors/__init__.py" = ["D104"]
 "lab_connectors/http/__init__.py" = ["D104"]
 "lab_connectors/mcp/__init__.py" = ["D104"]
-"lab_connectors/gcs/__init__.py" = ["D104"]
+"lab_connectors/gcs/__init__.py" = ["D104", "RUF022"]
 "lab_connectors/duckdb/__init__.py" = ["D104"]
-"tests/**" = ["D"]
+"tests/**" = [
+    "D",
+    # Test usano Exception generico volutamente
+    "TRY002",
+    # Custom logger API con kwargs extra
+    "PLE1205",
+    # nested with più leggibile nei test
+    "SIM117",
+]
 "lab_connectors/http/types.py" = ["D105"]
 
 [tool.mypy]
