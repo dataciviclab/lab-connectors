@@ -171,10 +171,11 @@ def guard_timed(
     except Exception as exc:
         elapsed = round((time.monotonic() - start) * 1000)
         mcp_err = McpError.from_exception(exc)
-        logger.exception(
+        logger.error(
             tool_name,
             f"Errore inaspettato: {mcp_err.code.value} ({elapsed}ms)",
             error_code=mcp_err.code.value,
             duration_ms=elapsed,
+            exc_info=True,
         )
         return mcp_err.to_dict()
