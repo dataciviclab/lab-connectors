@@ -417,7 +417,10 @@ class HttpClient:
         kwargs: dict[str, Any],
     ) -> HttpResult:
         """SSL fallback for HEAD — verify=False poi catena completa."""
-        fallback_kwargs = {k: v for k, v in kwargs.items() if k != "headers"}
+        # Filtra sia headers sia verify: verify viene forzato a False qui sotto,
+        # passarlo anche via **fallback_kwargs causerebbe TypeError
+        # ("got multiple values for keyword argument 'verify'").
+        fallback_kwargs = {k: v for k, v in kwargs.items() if k not in ("headers", "verify")}
         fallback_kwargs.setdefault("allow_redirects", True)
         _head_fb: Exception | None = None
         try:
