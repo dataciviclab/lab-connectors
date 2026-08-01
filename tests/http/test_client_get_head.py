@@ -256,6 +256,38 @@ def test_head_ssl_fallback_success(monkeypatch) -> None:
     assert any(a.get("verify") is False for a in attempts)
 
 
+def test_head_ssl_fallback_with_verify_kwarg(monkeypatch) -> None:
+    """contract: head(url, verify=False) + SSLError non deve crashare.
+
+    Regressione: _head_ssl_fallback passava verify due volte (esplicito +
+    dentro **fallback_kwargs) quando il chiamante usava verify=False —
+    TypeError "got multiple values for keyword argument 'verify'".
+    Riproduce il caso reale di source-observatory probe_reachability:
+    server con handshake TLS rotto (SSLError anche con verify=False) →
+    scatta il fallback SSL → prima del fix crashava.
+    """
+    fallback_calls: list[dict] = []
+
+    def fake_head_primary(url, **kw):
+        # SSLError anche con verify=False: handshake rotto, non certificato
+        raise requests.exceptions.SSLError("handshake failed")
+
+    def fake_session_head(self, url, **kw):
+        fallback_calls.append(kw)
+        return _FakeResponse(200, b"")
+
+    monkeypatch.setattr(requests, "head", fake_head_primary)
+    monkeypatch.setattr(requests.Session, "head", fake_session_head)
+
+    client = HttpClient()
+    result = client.head("https://example.test/ssl-broken", verify=False)
+
+    assert result.is_ok
+    assert result.ssl_fallback_used is True
+    # il fallback deve aver ricevuto verify=False una sola volta (niente TypeError)
+    assert fallback_calls[0].get("verify") is False
+
+
 def test_head_ssl_fallback_failure(monkeypatch) -> None:
     def fake(url, **kw):
         if kw.get("verify", True) is True:
