@@ -207,15 +207,17 @@ class TestGcsConnect:
             r = con.execute("SELECT 1 AS x").fetchall()
         assert r == [(1,)]
 
-    def test_gs_url_routes_to_httpfs(self) -> None:
-        """Path gs:// (anche glob multi-file) instrada su httpfs.
+    @pytest.mark.parametrize("prefix", ["gs://", "gs:/"])
+    def test_gs_url_routes_to_httpfs(self, prefix: str) -> None:
+        """Path gs:// e gs:/ (anche glob multi-file) instradano su httpfs.
 
         I glob multi-year su HTTP generico non sono supportati da DuckDB;
         l'unica via è httpfs con config S3/GCS. ``gcs_connect`` deve quindi
-        caricare httpfs per ``gs://`` come già faceva per ``s3://``.
+        caricare httpfs per ``gs`` come già faceva per ``s3`` (pattern
+        simmetrico: doppio e singolo slash).
         """
         with unittest.mock.patch("lab_connectors.duckdb.core.safe_connect") as mock_sc:
-            with gcs_connect("gs://dataciviclab-clean/slug/*/*.parquet"):
+            with gcs_connect(f"{prefix}dataciviclab-clean/slug/*/*.parquet"):
                 pass
         mock_sc.assert_called_once()
         kwargs = mock_sc.call_args.kwargs
