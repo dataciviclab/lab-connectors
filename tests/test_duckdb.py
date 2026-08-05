@@ -15,6 +15,7 @@ pytest.importorskip("duckdb")
 import duckdb
 
 from lab_connectors.duckdb import gcs_connect, safe_connect
+from lab_connectors.duckdb.core import GCS_S3_CONFIG
 
 pytestmark = pytest.mark.contract
 
@@ -205,6 +206,32 @@ class TestGcsConnect:
         with gcs_connect(":memory:") as con:
             r = con.execute("SELECT 1 AS x").fetchall()
         assert r == [(1,)]
+
+    @pytest.mark.parametrize("prefix", ["gs://", "gs:/"])
+    def test_gs_url_routes_to_httpfs(self, prefix: str) -> None:
+        """Path gs:// e gs:/ (anche glob multi-file) instradano su httpfs.
+
+        I glob multi-year su HTTP generico non sono supportati da DuckDB;
+        l'unica via è httpfs con config S3/GCS. ``gcs_connect`` deve quindi
+        caricare httpfs per ``gs`` come già faceva per ``s3`` (pattern
+        simmetrico: doppio e singolo slash).
+        """
+        with unittest.mock.patch("lab_connectors.duckdb.core.safe_connect") as mock_sc:
+            with gcs_connect(f"{prefix}dataciviclab-clean/slug/*/*.parquet"):
+                pass
+        mock_sc.assert_called_once()
+        kwargs = mock_sc.call_args.kwargs
+        assert kwargs["extensions"] == ["httpfs"]
+        assert kwargs["config"] == GCS_S3_CONFIG
+
+    def test_https_url_does_not_load_httpfs(self) -> None:
+        """Path https:// NON carica httpfs (lettura nativa stabile)."""
+        with unittest.mock.patch("lab_connectors.duckdb.core.safe_connect") as mock_sc:
+            with gcs_connect("https://storage.googleapis.com/dataciviclab-clean/x.parquet"):
+                pass
+        mock_sc.assert_called_once()
+        kwargs = mock_sc.call_args.kwargs
+        assert "extensions" not in kwargs
 
     def test_local_file_database(self, tmp_path: pytest.TempPathFactory) -> None:
         """gcs_connect con database DuckDB su file."""

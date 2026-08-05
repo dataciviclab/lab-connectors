@@ -102,7 +102,9 @@ def gcs_connect(
     DuckDB legge ``https://storage.googleapis.com/...`` nativamente
     senza estensioni (stabile, senza bug httpfs).
 
-    Per path ``s3://...`` carica httpfs (backward compat).
+    Per path ``s3://...`` o ``gs://...`` (inclusi glob multi-file
+    ``gs://bucket/slug/*/*.parquet``) carica httpfs (backward compat
+    e unica via per i glob: HTTP generico non supporta glob).
 
     Args:
         path: Path al parquet (HTTPS preferito per stabilità).
@@ -113,7 +115,9 @@ def gcs_connect(
 
     """
     s = str(path)
-    needs_httpfs = s.startswith(("s3://", "s3:/"))
+    # Tolleranza doppio/singolo slash per coerenza con s3:// e s3:/ (gs:/ non
+    # è mai stato usato, ma il pattern resta simmetrico e il routing corretto).
+    needs_httpfs = s.startswith(("s3://", "s3:/", "gs://", "gs:/"))
     if needs_httpfs:
         with safe_connect(database=database, extensions=["httpfs"], config=GCS_S3_CONFIG) as con:
             yield con
