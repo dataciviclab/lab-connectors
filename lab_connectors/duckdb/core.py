@@ -8,7 +8,10 @@ Supporta estensioni (es. ``httpfs`` per GCS) e configurazione DuckDB.
 quindi funziona anche su runner CI pulito.
 
 Configurazioni di default applicate automaticamente (override via ``config``):
-    - ``memory_limit``: ``'2GB'``
+    - ``memory_limit``: ``'2GB'`` (override via env ``DUCKDB_MEMORY_LIMIT``
+      o parametro ``config``) — utile per dataset con join pesanti (es.
+      clean su >4M righe) dove il default 2GB causa OOM anche su runner
+      con RAM abbondante
     - ``PRAGMA disable_progress_bar``: sempre attivo
 
 Uso::
@@ -25,6 +28,7 @@ Uso::
 
 from __future__ import annotations
 
+import os
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -42,9 +46,15 @@ GCS_S3_CONFIG: dict[str, str] = {
     "s3_use_ssl": "true",
 }
 
-_DEFAULT_CONFIG: dict[str, str] = {
-    "memory_limit": "2GB",
-}
+# Memory limit DuckDB: override via env DUCKDB_MEMORY_LIMIT (es. "4GB"),
+# altrimenti il default 2GB. Il parametro config di safe_connect vince su tutto.
+_MEMORY_LIMIT_ENV = "DUCKDB_MEMORY_LIMIT"
+_DEFAULT_MEMORY_LIMIT = "2GB"
+
+
+def _default_config() -> dict[str, str]:
+    limit = os.environ.get(_MEMORY_LIMIT_ENV, _DEFAULT_MEMORY_LIMIT)
+    return {"memory_limit": limit}
 
 
 @contextmanager
@@ -55,13 +65,14 @@ def safe_connect(
 ) -> Generator[Any, None, None]:
     """Context manager per connessioni DuckDB.
 
-    Applica ``_DEFAULT_CONFIG`` (``memory_limit='2GB'``)
-    e ``PRAGMA disable_progress_bar``.
+    Applica la config di default (``memory_limit`` da ``DUCKDB_MEMORY_LIMIT``
+    o ``'2GB'``) e ``PRAGMA disable_progress_bar``.
 
     Args:
         database: Path al database o ``":memory:"`` (default).
         extensions: Lista di estensioni DuckDB (``["httpfs"]``, ``["icu"]``).
-        config: Config DuckDB (es. ``GCS_S3_CONFIG``). Sovrascrive i default.
+        config: Config DuckDB (es. ``GCS_S3_CONFIG``). Sovrascrive i default,
+            incluse le env var.
 
     Yields:
         duckdb.DuckDBPyConnection — connessione aperta.
@@ -69,7 +80,7 @@ def safe_connect(
     """
     import duckdb
 
-    merged_config: dict[str, Any] = {**_DEFAULT_CONFIG, **(config or {})}
+    merged_config: dict[str, Any] = {**_default_config(), **(config or {})}
 
     con = duckdb.connect(database, config=merged_config)
     try:
