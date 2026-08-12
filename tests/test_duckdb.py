@@ -51,6 +51,26 @@ class TestSafeConnect:
             result = con.execute("SELECT v FROM t").fetchall()
         assert result == [(1,)]
 
+    def test_memory_limit_default_is_2gb(self) -> None:
+        """Default: memory_limit = 2GB (senza env)."""
+        with safe_connect(":memory:") as con:
+            limit = con.execute("SELECT current_setting('memory_limit')").fetchone()
+        assert limit and "1.8 GiB" in str(limit[0])
+
+    def test_memory_limit_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """DUCKDB_MEMORY_LIMIT sovrascrive il default 2GB."""
+        monkeypatch.setenv("DUCKDB_MEMORY_LIMIT", "4GB")
+        with safe_connect(":memory:") as con:
+            limit = con.execute("SELECT current_setting('memory_limit')").fetchone()
+        assert limit and "3.7 GiB" in str(limit[0])
+
+    def test_memory_limit_config_overrides_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Il parametro config vince sull'env."""
+        monkeypatch.setenv("DUCKDB_MEMORY_LIMIT", "4GB")
+        with safe_connect(":memory:", config={"memory_limit": "1GB"}) as con:
+            limit = con.execute("SELECT current_setting('memory_limit')").fetchone()
+        assert limit and "953.6 MiB" in str(limit[0])
+
 
 class TestSafeConnectErrors:
     """safe_connect — error handling."""
