@@ -50,11 +50,26 @@ GCS_S3_CONFIG: dict[str, str] = {
 # altrimenti il default 2GB. Il parametro config di safe_connect vince su tutto.
 _MEMORY_LIMIT_ENV = "DUCKDB_MEMORY_LIMIT"
 _DEFAULT_MEMORY_LIMIT = "2GB"
+# Threads e preserve_insertion_order: override via env (es. runner CI con
+# poca RAM: DUCKDB_THREADS=2 e DUCKDB_PRESERVE_INSERTION_ORDER=false riducono
+# il picco di memoria). Default = comportamento DuckDB standard.
+_THREADS_ENV = "DUCKDB_THREADS"
+_PRESERVE_ORDER_ENV = "DUCKDB_PRESERVE_INSERTION_ORDER"
 
 
 def _default_config() -> dict[str, str]:
     limit = os.environ.get(_MEMORY_LIMIT_ENV, _DEFAULT_MEMORY_LIMIT)
     return {"memory_limit": limit}
+
+
+def _apply_env_settings(con) -> None:
+    """Applica i limiti da env (threads, preserve) per runner CI con poca RAM."""
+    t = os.environ.get(_THREADS_ENV)
+    if t:
+        con.execute(f"SET threads={int(t)}")
+    po = os.environ.get(_PRESERVE_ORDER_ENV)
+    if po and po.lower() in ("false", "0"):
+        con.execute("SET preserve_insertion_order=false")
 
 
 @contextmanager
@@ -85,6 +100,7 @@ def safe_connect(
     con = duckdb.connect(database, config=merged_config)
     try:
         con.execute("PRAGMA disable_progress_bar")
+        _apply_env_settings(con)
         if extensions:
             for ext in extensions:
                 con.execute(f"INSTALL {ext}")
