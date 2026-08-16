@@ -32,7 +32,10 @@ import os
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import duckdb
 
 # ── Configurazione DuckDB per bucket GCS pubblici via S3-compatible API ───────
 # Mantenuta per backward compat. Preferire HTTPS che non richiede httpfs
@@ -62,7 +65,7 @@ def _default_config() -> dict[str, str]:
     return {"memory_limit": limit}
 
 
-def _apply_env_settings(con) -> None:
+def _apply_env_settings(con: duckdb.DuckDBPyConnection) -> None:
     """Applica i limiti da env (threads, preserve) per runner CI con poca RAM."""
     t = os.environ.get(_THREADS_ENV)
     if t:

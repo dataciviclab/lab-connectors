@@ -14,14 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v7
+      - uses: dataciviclab/.github/actions/python-setup@main
         with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          pip install -e ".[gcs]"
-          pip install google-cloud-storage
+          extra-packages: -e ".[gcs]" google-cloud-storage
 
       - name: Authenticate to Google Cloud
         env:

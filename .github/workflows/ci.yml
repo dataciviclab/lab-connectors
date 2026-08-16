@@ -13,19 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v7
+      - uses: dataciviclab/.github/actions/python-setup@main
         with:
-          python-version: "3.12"
-          cache: 'pip'
+          extra-packages: -e ".[dev,mcp,duckdb]" pytest-cov
 
-      - name: Install dependencies
-        run: pip install -e ".[dev,mcp,duckdb]" pytest-cov
-
-      - name: Ruff
-        run: ruff check .
-
-      - name: Mypy
-        run: mypy lab_connectors/
-
-      - name: Pytest
-        run: pytest tests/ -q -m "not smoke" --cov=lab_connectors --cov-report=term --cov-fail-under=80
+      - uses: dataciviclab/.github/actions/python-ci@main
+        with:
+          lint_paths: "."
+          mypy_paths: "lab_connectors/"
+          test_dir: "tests"
+          pytest_args: "-q -m \"not smoke\""
+          cov_module: "lab_connectors"
+          cov_report: "term"
+          cov_threshold: "80"
