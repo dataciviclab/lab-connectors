@@ -7,39 +7,8 @@ on:
       - "tests/**/test_*.py"
 
 jobs:
-  audit-markers:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies (for audit-test-markers CLI)
-        run: pip install -e ".[dev]"
-
-      - name: Audit test markers on changed files
-        run: |
-          # List test files changed in PR (vs base branch)
-          changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
-            -- 'tests/test_*.py' 'tests/**/test_*.py' || true)
-
-          if [ -z "$changed" ]; then
-            echo "No test files changed. OK."
-            exit 0
-          fi
-
-          echo "Changed test files:"
-          echo "$changed"
-
-          # Extract just filenames for the audit script (handle subdirectories)
-          files=""
-          for f in $changed; do
-            base=$(basename "$f")
-            files="$files $base"
-          done
-
-          audit-test-markers tests/ --diff --files $files
+  audit:
+    uses: dataciviclab/.github/.github/workflows/test-audit-reusable.yml@main
+    with:
+      test-dirs: "tests"
+      extra-packages: -e ".[dev]"
