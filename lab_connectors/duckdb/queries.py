@@ -25,11 +25,11 @@ if TYPE_CHECKING:
 # -- Internal helpers --------------------------------------------------------
 
 
-def _https_url(bucket_key: str, pattern_key: str, **kwargs: Any) -> str:
+def _https_url(bucket_key: str, pattern_key: str, *, prefix: str = "", **kwargs: Any) -> str:
     """Lazy import di ``https_url`` per evitare circular import."""
     from lab_connectors.gcs.paths import https_url
 
-    return https_url(bucket_key, pattern_key, **kwargs)
+    return https_url(bucket_key, pattern_key, prefix=prefix, **kwargs)
 
 
 def _query_df(sql: str) -> pd.DataFrame:
@@ -97,12 +97,14 @@ def load_mart_table(
     slug: str,
     table: str,
     year: int | str,
+    *,
+    prefix: str = "",
 ) -> pd.DataFrame:
     """Carica un singolo mart table da GCS come DataFrame.
 
-    Usa il path contract: ``{slug}/{year}/{table}.parquet`` nel bucket MART.
+    Usa il path contract: ``{prefix}{slug}/{year}/{table}.parquet`` nel bucket MART.
     """
-    url = _https_url("mart", "mart_parquet", slug=slug, year=str(year), table=table)
+    url = _https_url("mart", "mart_parquet", prefix=prefix, slug=slug, year=str(year), table=table)
     return _query_df(f"SELECT * FROM read_parquet('{url}')")
 
 
@@ -111,10 +113,14 @@ def load_mart_all_years(
     table: str,
     years: list[int],
     *,
+    prefix: str = "",
     union_by_name: bool = True,
 ) -> pd.DataFrame:
     """Carica un mart table per tutti gli anni con UNIONByName."""
-    urls = [_https_url("mart", "mart_parquet", slug=slug, year=str(y), table=table) for y in years]
+    urls = [
+        _https_url("mart", "mart_parquet", prefix=prefix, slug=slug, year=str(y), table=table)
+        for y in years
+    ]
     return _read_parquet_urls(urls, union_by_name=union_by_name)
 
 
@@ -125,10 +131,11 @@ def load_clean(
     slug: str,
     years: list[int],
     *,
+    prefix: str = "",
     union_by_name: bool = True,
 ) -> pd.DataFrame:
     """Carica il clean layer per uno slug, tutti gli anni richiesti."""
-    urls = [_https_url("clean", "clean_parquet", slug=slug, year=y) for y in years]
+    urls = [_https_url("clean", "clean_parquet", prefix=prefix, slug=slug, year=y) for y in years]
     return _read_parquet_urls(urls, union_by_name=union_by_name)
 
 
@@ -137,6 +144,7 @@ def query_clean(
     sql: str,
     years: list[int] | None = None,
     *,
+    prefix: str = "",
     table_alias: str = "clean_input",
 ) -> pd.DataFrame:
     """Esegue SQL con CTE virtuale sul clean layer.
@@ -147,7 +155,7 @@ def query_clean(
     if years is None:
         years = _resolve_years_from_registry(slug)
 
-    urls = [_https_url("clean", "clean_parquet", slug=slug, year=y) for y in years]
+    urls = [_https_url("clean", "clean_parquet", prefix=prefix, slug=slug, year=y) for y in years]
     paths = "', '".join(urls)
     cte = f"WITH {table_alias} AS (SELECT * FROM read_parquet(['{paths}'], union_by_name=true))"
     return _query_df(f"{cte} {sql}")
@@ -160,11 +168,13 @@ def count_rows(
     slug: str,
     year: int | str,
     layer: str = "clean",
+    *,
+    prefix: str = "",
 ) -> int:
     """Conta le righe di un parquet su GCS (per verifica)."""
     if layer != "clean":
         raise ValueError(f"Layer {layer!r} non supportato. Usa 'clean'.")
-    url = _https_url("clean", "clean_parquet", slug=slug, year=str(year))
+    url = _https_url("clean", "clean_parquet", prefix=prefix, slug=slug, year=str(year))
     row = _query_one(f"SELECT COUNT(*) AS n FROM read_parquet('{url}')")
     return int(row[0])
 
