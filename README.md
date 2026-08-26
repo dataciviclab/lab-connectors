@@ -11,7 +11,8 @@ context manager DuckDB, utility per test).
 | [`lab_connectors.http`](#http) | HTTP client con SSL fallback, retry, timeout, circuit breaker |
 | [`lab_connectors.mcp`](#mcp) | Infrastruttura server MCP: factory, error handling, logging, cache |
 | [`lab_connectors.gcs`](#gcs) | Client GCS (list, upload, verify) + path contract canonici |
-| [`lab_connectors.duckdb`](#duckdb) | Context manager connessioni DuckDB (anche da GCS) |
+| [`lab_connectors.duckdb`](#duckdb) | Context manager connessioni DuckDB + query helpers |
+| [`lab_connectors.registry`](#registry) | Modelli e client per registry/registry.json |
 | [`lab_connectors.testing`](#testing) | Fake HTTP client e utility per test |
 
 Dettaglio API completo: [docs/api-reference.md](docs/api-reference.md)
@@ -97,6 +98,41 @@ with safe_connect(":memory:") as con:
 `gcs_connect()` legge parquet direttamente da GCS: URL `https://...` in modo
 nativo (senza estensioni, stabile); path `gs://...` o `s3://...` — inclusi
 glob multi-year come `gs://bucket/slug/*/*.parquet` — caricando httpfs.
+
+`load_mart_table()`, `load_clean()`, `query_clean()` caricano dati da GCS
+come DataFrame — il punto di partenza per le dashboard Streamlit:
+
+```python
+from lab_connectors.duckdb.queries import load_mart_table, query_clean
+
+df = load_mart_table("rna_aiuti_stato", "mart_aiuti_per_regione", 2023)
+
+df = query_clean(
+    "rna_aiuti_stato",
+    "SELECT regione_beneficiario, SUM(elemento_aiuto) AS totale "
+    "FROM clean_input GROUP BY regione_beneficiario ORDER BY totale DESC",
+)
+```
+
+## Registry
+
+Modelli e client per `registry/registry.json` — il catalogo degli artifact di ogni repo.
+
+```python
+from lab_connectors.registry import load_registry
+
+reg = load_registry(Path("rna-aiuti-stato/registry/registry.json"))
+# oppure da GitHub
+reg = load_registry_github("rna-aiuti-stato")
+
+for ds in reg.datasets:
+    print(f"{ds.slug}: {ds.period} ({len(ds.columns)} cols)")
+
+for sig in reg.signals:
+    print(f"{sig.id}: {sig.status} — {sig.detail}")
+```
+
+`registry_to_dict()` converte le dataclass in dict per backward compat.
 
 ## Testing
 
