@@ -17,8 +17,11 @@ pytestmark = pytest.mark.contract
 
 
 def _has_fastmcp_in_modules() -> bool:
-    """Check if FastMCP is loaded in sys.modules."""
-    return any("fastmcp" in m.lower() or "mcp.server" in m.lower() for m in sys.modules)
+    """Check if FastMCP/MCPServer is loaded in sys.modules."""
+    return any(
+        "fastmcp" in m.lower() or "mcp.server" in m.lower()
+        for m in sys.modules
+    )
 
 
 class TestRootLazyExports:
@@ -44,9 +47,9 @@ class TestRootLazyExports:
         assert not fastmcp_loaded, f"create_mcp_server import loaded FastMCP: {new}"
 
     def test_create_mcp_server_call_loads_fastmcp(self) -> None:
-        """Calling create_mcp_server() SHOULD load FastMCP.
+        """Calling create_mcp_server() SHOULD load FastMCP/MCPServer.
 
-        Checks that _get_fastmcp() imports FastMCP internally when called,
+        Checks that _get_fastmcp() imports FastMCP/MCPServer internally when called,
         regardless of whether previous tests have already loaded it.
         """
         from lab_connectors.mcp.core import _get_fastmcp
@@ -54,10 +57,10 @@ class TestRootLazyExports:
         # Clear any cached result from previous calls
         result = _get_fastmcp()
         if result is None:
-            pytest.skip("FastMCP not installed (no [mcp] extra)")
+            pytest.skip("FastMCP/MCPServer not installed (no [mcp] extra)")
 
         assert result is not None
-        assert result.__name__ == "FastMCP"
+        assert result.__name__ in ("FastMCP", "MCPServer")
 
 
 class TestRootLazyNameResolution:

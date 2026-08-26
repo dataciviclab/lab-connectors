@@ -32,12 +32,23 @@ from lab_connectors.mcp.logging import get_mcp_logger
 
 
 def _get_fastmcp() -> type | None:
-    """Lazy import of FastMCP (expensive: ~3.5s for pydantic+starlette)."""
+    """Lazy import of FastMCP/MCPServer (expensive: ~3.5s for pydantic+starlette).
+    
+    v1.x: FastMCP in mcp.server.fastmcp
+    v2.x: MCPServer in mcp.server (FastMCP removed)
+    """
+    # Try v2.x first (MCPServer)
+    try:
+        from mcp.server import MCPServer as FastMCP  # type: ignore[attr-defined]
+        return FastMCP
+    except ImportError:
+        pass
+    # Fallback v1.x (FastMCP)
     try:
         from mcp.server.fastmcp import FastMCP
+        return FastMCP
     except ImportError:
-        FastMCP = None  # type: ignore[assignment, misc]
-    return FastMCP
+        return None
 
 
 def create_mcp_server(

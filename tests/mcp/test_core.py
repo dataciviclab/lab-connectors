@@ -14,10 +14,11 @@ pytestmark = pytest.mark.contract
 
 class TestCreateMcpServer:
     def test_creates_fastmcp_with_name(self) -> None:
-        """create_mcp_server deve restituire un FastMCP con nome corretto."""
+        """create_mcp_server deve restituire un FastMCP/MCPServer con nome corretto."""
         mcp = create_mcp_server("test-server", "Test instructions")
         assert mcp.name == "test-server"
-        assert type(mcp).__name__ == "FastMCP"
+        # v1.x: FastMCP, v2.x: MCPServer
+        assert type(mcp).__name__ in ("FastMCP", "MCPServer")
 
     def test_creates_fastmcp_with_instructions(self) -> None:
         """Le instructions devono essere accessibili."""
