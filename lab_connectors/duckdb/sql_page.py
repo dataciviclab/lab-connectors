@@ -209,6 +209,11 @@ def render_sql_query(
 
             except Exception as e:
                 st.error(f"Errore durante l'esecuzione: {e}")
+                if "404" in str(e):
+                    st.info(
+                        "Il file Parquet non è stato trovato su GCS. "
+                        "Prova con un anno diverso — potrebbe non essere stato pubblicato."
+                    )
                 if "wrapped_sql" in locals():
                     with st.expander("SQL che ha causato l'errore", expanded=True):
                         st.code(wrapped_sql, language="sql")
