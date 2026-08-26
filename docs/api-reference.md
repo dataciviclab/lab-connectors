@@ -1,6 +1,6 @@
 # lab-connectors — API reference
 
-Dettaglio dei 5 package di `lab-connectors`. Il README principale è la panoramica.
+Dettaglio dei 7 package di `lab-connectors`. Il README principale è la panoramica.
 
 ## `lab_connectors.http`
 
@@ -293,6 +293,88 @@ evitando il bug "Information loss on integer cast".
 
 ```python
 from lab_connectors.duckdb import GCS_S3_CONFIG  # DeprecationWarning
+```
+
+### `duckdb.queries` — high-level query helpers
+
+Carica clean/mart da GCS come DataFrame, usando il path contract.
+
+```python
+from lab_connectors.duckdb.queries import (
+    load_mart_table, load_mart_all_years,
+    load_clean, query_clean, count_rows,
+)
+```
+
+#### `load_mart_table(slug, table, year, *, prefix="")`
+
+Carica un singolo mart table da GCS.
+
+```python
+df = load_mart_table("rna_aiuti_stato", "mart_aiuti_per_regione", 2023)
+# Con prefix per repo con subdirectory
+df = load_mart_table("profilo_politico", "mart_profilo", 2026, prefix="open-politica/")
+```
+
+#### `load_mart_all_years(slug, table, years, *, prefix="", union_by_name=True)`
+
+Carica un mart table per tutti gli anni (UNIONByName).
+
+#### `load_clean(slug, years, *, prefix="", union_by_name=True)`
+
+Carica il clean layer per uno slug, tutti gli anni.
+
+#### `query_clean(slug, sql, years=None, *, prefix="", table_alias="clean_input")`
+
+Esegue SQL con CTE virtuale sul clean layer.
+
+```python
+df = query_clean(
+    "rna_aiuti_stato",
+    "SELECT regione_beneficiario, SUM(elemento_aiuto) AS totale "
+    "FROM clean_input GROUP BY regione_beneficiario ORDER BY totale DESC",
+    years=[2022, 2023, 2024],
+)
+```
+
+#### `count_rows(slug, year, layer="clean", *, prefix="")`
+
+Conta le righe di un parquet su GCS.
+
+---
+
+## `lab_connectors.registry`
+
+Modelli e client per `registry/registry.json`.
+
+### Modelli
+
+```python
+from lab_connectors.registry.models import (
+    Registry, Dataset, Mart, Signal, Run, Column, Location,
+)
+```
+
+Ogni dataclass ha `from_dict(d)` per parsing sicuro da dict JSON.
+
+| Dataclass | Campi chiave |
+|-----------|-------------|
+| `Registry` | repo, source_repo, updated_at, datasets, marts, signals, entities |
+| `Dataset` | slug, name, description, period, columns, location, stage |
+| `Mart` | slug, dataset, table, location, primary_key, columns |
+| `Signal` | id, status (ok/warn/error), detail, run |
+| `Run` | run_id, year, status, quality_score, duration_seconds |
+| `Column` | name, type, role, semantic_type |
+| `Location` | type, path, multi_file |
+
+### Client
+
+```python
+from lab_connectors.registry import load_registry, load_registry_github, registry_to_dict
+
+reg = load_registry(Path("repo/registry/registry.json"))
+reg = load_registry_github("rna-aiuti-stato")
+d = registry_to_dict(reg)  # backward compat
 ```
 
 ---

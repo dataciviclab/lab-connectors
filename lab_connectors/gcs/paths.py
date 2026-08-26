@@ -61,32 +61,62 @@ def get_bucket(bucket_key: str) -> str:
     return buckets[bucket_key]
 
 
-def resolve(pattern_key: str, **kwargs: Any) -> str:
+def resolve(pattern_key: str, *, prefix: str = "", **kwargs: Any) -> str:
     """Risolve un pattern in path relativo al bucket root.
 
     I pattern senza placeholder (es. ``catalog_manifest``) non richiedono kwargs.
     Quelli con placeholder (es. ``clean_parquet``) richiedono ``slug``, ``year`` ecc.
+
+    Args:
+        pattern_key: Chiave del pattern (es. ``clean_parquet``).
+        prefix: Prefisso opzionale da prependere al path risolto.
+            Serve per repo che pubblicano sotto una subdirectory
+            (es. ``prefix="open-politica/"``).
+        **kwargs: Parametri del pattern (``slug``, ``year``, ``table``).
+
+    Returns:
+        Path relativo al bucket root, es. ``slug/2024/slug_2024_clean.parquet``.
+
     """
     patterns = load_contract()["patterns"]
     if pattern_key not in patterns:
         raise KeyError(f"Pattern sconosciuto: {pattern_key!r}. Options: {list(patterns)}")
     try:
-        return patterns[pattern_key].format(**kwargs)
+        resolved = patterns[pattern_key].format(**kwargs)
     except KeyError as e:
         raise KeyError(
             f"Parametro mancante per {pattern_key!r}: {e}. Template: {patterns[pattern_key]!r}"
         ) from None
+    return f"{prefix}{resolved}" if prefix else resolved
 
 
-def gs_url(bucket_key: str, pattern_key: str, **kwargs: Any) -> str:
-    """URL ``gs://<bucket>/<path>``."""
-    return f"gs://{get_bucket(bucket_key)}/{resolve(pattern_key, **kwargs)}"
+def gs_url(bucket_key: str, pattern_key: str, *, prefix: str = "", **kwargs: Any) -> str:
+    """URL ``gs://<bucket>/<path>``.
+
+    Args:
+        bucket_key: Chiave bucket (``clean``, ``mart``).
+        pattern_key: Chiave del pattern.
+        prefix: Prefisso opzionale (es. ``"open-politica/"``).
+        **kwargs: Parametri del pattern.
+
+    """
+    return f"gs://{get_bucket(bucket_key)}/{resolve(pattern_key, prefix=prefix, **kwargs)}"
 
 
-def https_url(bucket_key: str, pattern_key: str, **kwargs: Any) -> str:
-    """URL pubblico ``https://storage.googleapis.com/<bucket>/<path>``."""
+def https_url(bucket_key: str, pattern_key: str, *, prefix: str = "", **kwargs: Any) -> str:
+    """URL pubblico ``https://storage.googleapis.com/<bucket>/<path>``.
+
+    Args:
+        bucket_key: Chiave bucket (``clean``, ``mart``).
+        pattern_key: Chiave del pattern.
+        prefix: Prefisso opzionale (es. ``"open-politica/"``).
+        **kwargs: Parametri del pattern.
+
+    """
     bucket = get_bucket(bucket_key)
-    return f"https://storage.googleapis.com/{bucket}/{resolve(pattern_key, **kwargs)}"
+    return (
+        f"https://storage.googleapis.com/{bucket}/{resolve(pattern_key, prefix=prefix, **kwargs)}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -198,9 +228,9 @@ def glob_to_regex(pattern: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def pipeline_run(slug: str, year: int | str) -> str:
-    """Path ``{slug}/{year}/pipeline_run.json``."""
-    return resolve("pipeline_run", slug=slug, year=str(year))
+def pipeline_run(slug: str, year: int | str, *, prefix: str = "") -> str:
+    """Path ``{prefix}{slug}/{year}/pipeline_run.json``."""
+    return resolve("pipeline_run", prefix=prefix, slug=slug, year=str(year))
 
 
 def catalog_manifest() -> str:
@@ -208,19 +238,20 @@ def catalog_manifest() -> str:
     return resolve("catalog_manifest")
 
 
-def mart_parquet(slug: str, year: int | str, table: str) -> str:
-    """Path ``{slug}/{year}/{table}.parquet`` nel bucket MART.
+def mart_parquet(slug: str, year: int | str, table: str, *, prefix: str = "") -> str:
+    """Path ``{prefix}{slug}/{year}/{table}.parquet`` nel bucket MART.
 
     Args:
         slug: Dataset slug (es. ``ispra_ru_base``).
         year: Anno (int o stringa).
         table: Nome della tabella MART (es. ``costi_procapite``).
+        prefix: Prefisso opzionale (es. ``"open-politica/"``).
 
     Returns:
-        Path relativo al bucket root, es. ``ispra_ru_base/2024/costi.parquet``.
+        Path relativo al bucket root.
 
     """
-    return resolve("mart_parquet", slug=slug, year=str(year), table=table)
+    return resolve("mart_parquet", prefix=prefix, slug=slug, year=str(year), table=table)
 
 
 __all__ = [
