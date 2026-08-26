@@ -30,6 +30,7 @@ gcs = [
 ]
 duckdb = [
     "duckdb>=1.5.3",
+    "pandas>=2.0",
 ]
 dev = [
     "ruff>=0.8.0",
@@ -72,6 +73,7 @@ ignore = [
 "lab_connectors/mcp/__init__.py" = ["D104"]
 "lab_connectors/gcs/__init__.py" = ["D104", "RUF022"]
 "lab_connectors/duckdb/__init__.py" = ["D104"]
+"lab_connectors/duckdb/queries.py" = ["D104"]
 "tests/**" = [
     "D",
     # Test usano Exception generico volutamente
@@ -90,6 +92,10 @@ disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = "duckdb"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pandas"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

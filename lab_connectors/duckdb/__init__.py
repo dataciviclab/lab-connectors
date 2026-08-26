@@ -1,4 +1,4 @@
-"""Context manager per connessioni DuckDB.
+"""Context manager per connessioni DuckDB e query helpers per GCS.
 
 Uso::
 
@@ -12,9 +12,15 @@ Uso::
     with gcs_connect("https://storage.googleapis.com/dataciviclab-clean/...") as con:
         con.execute("SELECT * FROM read_parquet('https://storage.googleapis.com/...')")
 
-    # Legacy: path S3 con httpfs
-    # with safe_connect(extensions=["httpfs"], config=GCS_S3_CONFIG) as con:
-    #     con.execute("SELECT * FROM read_parquet('s3://bucket/file.parquet')")
+Uso high-level (query helpers)::
+
+    from lab_connectors.duckdb.queries import (
+        load_mart_table, load_mart_all_years,
+        load_clean, query_clean, count_rows,
+    )
+
+    df = load_mart_table("rna_aiuti_stato", "mart_aiuti_per_regione", 2023)
+    df = query_clean("rna_aiuti_stato", "SELECT * FROM clean_input WHERE anno = 2023")
 """
 
 from __future__ import annotations
