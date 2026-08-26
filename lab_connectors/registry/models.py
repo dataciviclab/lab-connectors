@@ -97,7 +97,13 @@ class Mart:
     slug: str = ""
     dataset: str = ""
     table: str = ""
+    name: str = ""
+    description: str = ""
     location: Location = field(default_factory=Location)
+    primary_key: list[str] = field(default_factory=list)
+    required_columns: list[str] = field(default_factory=list)
+    min_rows: int | None = None
+    columns: list[Column] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict) -> Mart:
@@ -106,7 +112,13 @@ class Mart:
             slug=d.get("slug", ""),
             dataset=d.get("dataset", ""),
             table=d.get("table", ""),
+            name=d.get("name", ""),
+            description=d.get("description", ""),
             location=Location.from_dict(d.get("location", {})),
+            primary_key=d.get("primary_key", []),
+            required_columns=d.get("required_columns", []),
+            min_rows=d.get("min_rows"),
+            columns=[Column.from_dict(c) for c in d.get("columns", [])],
         )
 
 
@@ -122,6 +134,7 @@ class Run:
     output_bytes: dict = field(default_factory=dict)
     started_at: str = ""
     finished_at: str = ""
+    updated_at: str = ""
     duration_seconds: float | None = None
 
     @classmethod
@@ -136,6 +149,7 @@ class Run:
             output_bytes=d.get("output_bytes", {}),
             started_at=d.get("started_at", ""),
             finished_at=d.get("finished_at", ""),
+            updated_at=d.get("updated_at", ""),
             duration_seconds=d.get("duration_seconds"),
         )
 
