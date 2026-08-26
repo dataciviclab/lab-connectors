@@ -147,7 +147,9 @@ def render_sql_query(
         with st.spinner(f"Esecuzione su `{selected_slug}` via DuckDB…"):
             try:
                 # Risolvi slug → URL GCS
-                urls, cte_expr, _ = _resolve_slug(selected_slug, prefix, ds_years)
+                urls, cte_expr, _ = _resolve_slug(
+                    selected_slug, prefix, ds_years, multi_file=ds_info.get("multi_file", True)
+                )
                 wrapped_sql = _build_query(sql, cte_expr, max_rows)
 
                 # Esegui
@@ -241,20 +243,29 @@ def _get_datasets_with_columns(registry: Any) -> list[dict[str, Any]]:
                 "name": ds.name,
                 "description": ds.description or "",
                 "period": ds.period or {},
+                "multi_file": ds.location.multi_file if ds.location else True,
                 "columns": cols,
             }
         )
     return datasets
 
 
-def _resolve_slug(slug: str, prefix: str, years: list[int]) -> tuple[list[str], str, dict]:
-    """Resolve slug → (urls, cte_expr, info)."""
+def _resolve_slug(
+    slug: str, prefix: str, years: list[int], multi_file: bool = True
+) -> tuple[list[str], str, dict]:
+    """Resolve slug → (urls, cte_expr, info).
+
+    multi_file=True  → un Parquet per anno: {prefix}{slug}/{year}/{slug}_{year}_clean.parquet
+    multi_file=False → singolo file flat:   {prefix}{slug}/{slug}_clean.parquet
+    """
     from lab_connectors.gcs.paths import https_url
 
-    urls = []
-    for y in years:
-        url = https_url("clean", "clean_parquet", slug=slug, year=y, prefix=prefix)
-        urls.append(url)
+    if multi_file:
+        urls = [
+            https_url("clean", "clean_parquet", slug=slug, year=y, prefix=prefix) for y in years
+        ]
+    else:
+        urls = [https_url("clean", "clean_parquet", slug=slug, prefix=prefix)]
 
     if len(urls) == 1:
         cte_expr = f"SELECT * FROM read_parquet('{urls[0]}')"
