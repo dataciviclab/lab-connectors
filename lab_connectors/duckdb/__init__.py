@@ -21,6 +21,13 @@ Uso high-level (query helpers)::
 
     df = load_mart_table("rna_aiuti_stato", "mart_aiuti_per_regione", 2023)
     df = query_clean("rna_aiuti_stato", "SELECT * FROM clean_input WHERE anno = 2023")
+
+Uso Streamlit (sql page)::
+
+    from lab_connectors.duckdb.sql_page import render_sql_query
+
+    # Nel file pages/SQL.py
+    render_sql_query(years=[2020, 2021, 2022, 2023, 2024], prefix="conto-annuale/")
 """
 
 from __future__ import annotations
