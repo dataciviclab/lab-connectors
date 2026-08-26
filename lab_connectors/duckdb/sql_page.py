@@ -265,7 +265,8 @@ def _resolve_slug(
             https_url("clean", "clean_parquet", slug=slug, year=y, prefix=prefix) for y in years
         ]
     else:
-        urls = [https_url("clean", "clean_parquet", slug=slug, prefix=prefix)]
+        # File singolo: usa l'ultimo anno disponibile
+        urls = [https_url("clean", "clean_parquet", slug=slug, year=years[-1], prefix=prefix)]
 
     if len(urls) == 1:
         cte_expr = f"SELECT * FROM read_parquet('{urls[0]}')"
