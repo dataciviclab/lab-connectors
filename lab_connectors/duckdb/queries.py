@@ -66,30 +66,6 @@ def _read_parquet_urls(
     return _query_df(f"SELECT * FROM read_parquet(['{paths}']{union})")
 
 
-def _resolve_years_from_registry(slug: str) -> list[int]:
-    """Risolve gli anni disponibili da registry.json su GitHub."""
-    import requests
-
-    registry_url = (
-        "https://raw.githubusercontent.com/dataciviclab/"
-        "dataset-incubator/main/registry/registry.json"
-    )
-    try:
-        resp = requests.get(registry_url, timeout=15)
-        resp.raise_for_status()
-        registry = resp.json()
-        for ds in registry.get("datasets", []):
-            if ds.get("slug") == slug:
-                period = ds.get("period", {})
-                start = period.get("start")
-                end = period.get("end")
-                if start and end:
-                    return list(range(int(start), int(end) + 1))
-    except Exception:
-        pass
-    return list(range(2017, 2026))
-
-
 # -- Mart helpers ------------------------------------------------------------
 
 
@@ -142,7 +118,7 @@ def load_clean(
 def query_clean(
     slug: str,
     sql: str,
-    years: list[int] | None = None,
+    years: list[int],
     *,
     prefix: str = "",
     table_alias: str = "clean_input",
@@ -152,9 +128,6 @@ def query_clean(
     Risolue i path GCS per tutti gli anni e crea una CTE ``{table_alias}``
     referenziabile nella query SQL.
     """
-    if years is None:
-        years = _resolve_years_from_registry(slug)
-
     urls = [_https_url("clean", "clean_parquet", prefix=prefix, slug=slug, year=y) for y in years]
     paths = "', '".join(urls)
     cte = f"WITH {table_alias} AS (SELECT * FROM read_parquet(['{paths}'], union_by_name=true))"
