@@ -1,122 +1,275 @@
-"""Streamlit SQL query page.
+"""Pagina SQL interattiva riutilizzabile per ogni dashboard Streamlit.
 
-Usage:
-
-    from lab_connectors.duckdb.sql_page import render_sql_query
-    render_sql_query(years=[2020, 2021, 2022, 2023, 2024])
-    render_sql_query(years=YEARS, prefix="conto-annuale/")
+Replica l'UX di lab-dashboard/pages/09_Query_SQL.py, ma usando
+lab_connectors.registry invece di lab-dashboard.sources.load_catalog().
 """
 
 from __future__ import annotations
 
 import time
+from typing import Any
 
-_DEFAULT_EXAMPLES: list[dict[str, str]] = [
-    {"label": "Primi 10 righe", "sql": "SELECT * FROM clean_input LIMIT 10"},
-    {"label": "Schema colonne", "sql": "DESCRIBE SELECT * FROM clean_input"},
-    {"label": "Conteggio totale", "sql": "SELECT COUNT(*) AS totale FROM clean_input"},
-]
+import pandas as pd
 
 
 def render_sql_query(
-    years: list[int],
     *,
+    registry: Any,
+    years: list[int] | None = None,
     prefix: str = "",
-    slug: str | None = None,
+    default_slug: str | None = None,
+    title: str = "🧪 Query SQL",
+    description: str = (
+        "Scrivi query SQL sui dataset pubblici. "
+        "Usa ``clean_input`` come nome della tabella virtuale — "
+        "viene risolta automaticamente sui Parquet GCS."
+    ),
     max_rows: int = 1000,
-    title: str = "\U0001f9ea Query SQL",
-    description: str | None = None,
-    example_queries: list[dict[str, str]] | None = None,
 ) -> None:
-    """Render a full SQL query page in Streamlit."""
+    """Render a complete SQL query page.
+
+    Args:
+        registry: Registry object (da load_registry()).
+        years: Anni disponibili (se None, presi dal registry).
+        prefix: Prefisso GCS per il path contract.
+        default_slug: Slug preselezionato (se None, primo del registry).
+        title: Titolo della pagina.
+        description: Descrizione sotto il titolo.
+        max_rows: Numero massimo di righe da restituire.
+
+    """
+    import duckdb
     import streamlit as st
 
     st.title(title)
-    st.markdown(
-        description
-        or (
-            "Scrivi query **SQL** sui dati pubblici. "
-            "Usa ``clean_input`` come nome della tabella virtuale."
-        )
+    st.markdown(description)
+
+    # ── Dataset disponibili ────────────────────────────────────────────────────
+    datasets = _get_datasets_with_columns(registry)
+    slug_list = [ds["slug"] for ds in datasets]
+    slug_to_ds = {ds["slug"]: ds for ds in datasets}
+
+    if not slug_list:
+        st.error("Nessun dataset trovato nel registry.")
+        return
+
+    # ── Selectbox dataset ──────────────────────────────────────────────────────
+    idx = 0
+    if default_slug and default_slug in slug_list:
+        idx = slug_list.index(default_slug)
+
+    selected_slug = st.selectbox(
+        "📋 Dataset",
+        slug_list,
+        index=idx,
+        format_func=lambda s: f"{s} ({len(slug_to_ds[s]['columns'])} colonne)",
     )
 
-    examples = example_queries or _DEFAULT_EXAMPLES
+    ds_info = slug_to_ds[selected_slug]
 
-    # -- Query di esempio
-    st.subheader("Query di esempio")
-    cols = st.columns(min(len(examples), 3))
-    for i, ex in enumerate(examples):
-        with cols[i % len(cols)]:
-            if st.button(ex["label"], key=f"sql_ex_{i}", use_container_width=True):
-                st.session_state.sql_query_sql = ex["sql"]
-                st.rerun()
+    # ── Schema colonne ─────────────────────────────────────────────────────────
+    if ds_info["columns"]:
+        with st.expander(f"Schema: {selected_slug}", expanded=False):
+            st.dataframe(
+                pd.DataFrame(ds_info["columns"]),
+                use_container_width=True,
+                hide_index=True,
+            )
 
-    st.markdown("---")
+    # ── Anni disponibili ──────────────────────────────────────────────────────
+    # Usa il period dal registry per il dataset selezionato
+    period = ds_info.get("period", {})
+    start = period.get("start")
+    end = period.get("end")
+    if start and end:
+        ds_years = list(range(start, end + 1))
+    elif years:
+        ds_years = years
+    else:
+        ds_years = list(range(2017, 2026))
 
-    if "sql_history" not in st.session_state:
-        st.session_state.sql_history = []
+    st.caption(
+        f"Anni: {ds_years[0]}–{ds_years[-1]} ({len(ds_years)} anni) · "
+        f"CTE ``clean_input`` risolta su {len(ds_years)} file Parquet"
+    )
 
-    # -- Interfaccia
-    col_sql, col_btn = st.columns([5, 1])
-    with col_sql:
-        sql = st.text_area(
-            "SQL",
-            value=st.session_state.get("sql_query_sql", "SELECT * FROM clean_input LIMIT 10"),
-            height=100,
-            key="sql_page_sql",
+    # ── Editor SQL ─────────────────────────────────────────────────────────────
+    default_sql = st.session_state.get("sql_query_sql", _default_query(selected_slug))
+    sql = st.text_area(
+        "SQL",
+        value=default_sql,
+        height=150,
+        key="sql_query_sql",
+        label_visibility="collapsed",
+        help="Usa 'clean_input' come tabella. La CTE viene risolta automaticamente.",
+    )
+
+    # ── Pulsanti ───────────────────────────────────────────────────────────────
+    col_exec, col_hist = st.columns([3, 1])
+    with col_exec:
+        execute = st.button(
+            "▶️ Esegui",
+            type="primary",
+            use_container_width=True,
         )
-    with col_btn:
-        st.write("")
-        st.write("")
-        execute = st.button("\u25b6 Esegui", key="sql_page_exec", use_container_width=True)
+    with col_hist:
+        show_hist = st.button(
+            "📜 Storico",
+            use_container_width=True,
+        )
 
-    # -- Esecuzione
-    if execute and sql.strip():
-        from lab_connectors.duckdb.queries import query_clean
+    # ── Storico ────────────────────────────────────────────────────────────────
+    history = st.session_state.setdefault("sql_history", [])
 
-        with st.spinner("Esecuzione su DuckDB..."):
+    if show_hist and history:
+        st.subheader("📜 Storico")
+        for i, entry in enumerate(reversed(history[-8:])):
+            label = entry["sql"][:60].replace("\n", " ")
+            if len(entry["sql"]) > 60:
+                label += "…"
+            col_a, col_b = st.columns([6, 1])
+            with col_a:
+                if st.button(
+                    f"`{entry['slug']}` {label}",
+                    key=f"hist_{i}",
+                    help=f"{entry['rows']} righe · {entry['time']}",
+                ):
+                    st.session_state.sql_query_sql = entry["sql"]
+                    st.rerun()
+            with col_b:
+                st.caption(f"{entry['rows']} rows")
+        if st.button("Svuota storico", key="clear_hist"):
+            st.session_state.sql_history = []
+            st.rerun()
+
+    # ── Esecuzione query ───────────────────────────────────────────────────────
+    if execute:
+        with st.spinner(f"Esecuzione su `{selected_slug}` via DuckDB…"):
             try:
+                # Risolvi slug → URL GCS
+                urls, cte_expr, _ = _resolve_slug(selected_slug, prefix, ds_years)
+                wrapped_sql = _build_query(sql, cte_expr, max_rows)
+
+                # Esegui
                 t0 = time.perf_counter()
-                df = query_clean(slug or _guess_slug(prefix), sql, years, prefix=prefix)
+                with duckdb.connect() as con:
+                    df = con.sql(wrapped_sql).df()
                 elapsed = time.perf_counter() - t0
+
                 n_rows = len(df)
                 is_truncated = n_rows >= max_rows
-                if is_truncated:
-                    df = df.head(max_rows)
 
-                m1, m2 = st.columns(2)
+                # Metriche
+                m1, m2, m3 = st.columns(3)
                 m1.metric("Righe restituite", f"{n_rows:,}")
                 m2.metric("Tempo esecuzione", f"{elapsed:.2f}s")
+                file_label = "1 file" if len(urls) == 1 else f"{len(urls)} file"
+                m3.metric("Parquet letti", file_label)
 
-                if n_rows == 0:
-                    st.success("Query eseguita — 0 righe restituite.")
-                else:
-                    st.dataframe(df, width="stretch")
+                if is_truncated:
+                    st.info(
+                        f"Risultato troncato a {max_rows} righe. "
+                        "Aumenta il limite o aggiungi ``LIMIT`` nella query."
+                    )
+
+                if n_rows == 0 and not is_truncated:
+                    st.success("Query eseguita correttamente — **0 righe** restituite.")
+                elif n_rows > 0:
+                    st.dataframe(
+                        df,
+                        use_container_width=True,
+                        column_config={
+                            col: st.column_config.Column(col, width="medium")
+                            for col in df.columns[:8]
+                        },
+                    )
+
+                    # Download CSV
                     csv_data = df.to_csv(index=False).encode("utf-8")
                     st.download_button(
                         ":material/download: Scarica CSV",
                         data=csv_data,
-                        file_name=f"query_{int(time.time())}.csv",
+                        file_name=f"{selected_slug}_query_{int(time.time())}.csv",
                         mime="text/csv",
                     )
 
+                # Storico
                 st.session_state.sql_history.append(
                     {
-                        "sql": sql[:80],
+                        "slug": selected_slug,
+                        "sql": sql,
                         "rows": n_rows,
                         "time": f"{elapsed:.2f}s",
                     }
                 )
+
+                # SQL eseguita in expander (debug)
+                with st.expander("SQL effettivamente eseguita", expanded=False):
+                    st.code(wrapped_sql, language="sql")
+
             except Exception as e:
-                st.error(f"Errore: {e}")
-
-    # -- Storico
-    if st.session_state.sql_history:
-        with st.expander("Storico query", expanded=False):
-            for entry in reversed(st.session_state.sql_history[-10:]):
-                st.caption(f"`{entry['sql']}` \u2014 {entry['rows']} righe \u00b7 {entry['time']}")
+                st.error(f"Errore durante l'esecuzione: {e}")
+                if "wrapped_sql" in locals():
+                    with st.expander("SQL che ha causato l'errore", expanded=True):
+                        st.code(wrapped_sql, language="sql")
 
 
-def _guess_slug(prefix: str) -> str:
-    """Indovina lo slug dal prefix."""
-    return prefix.rstrip("/").replace("-", "_") if prefix else "dataset"
+# ── Helper interni ─────────────────────────────────────────────────────────────
+
+
+def _get_datasets_with_columns(registry: Any) -> list[dict[str, Any]]:
+    """Extract datasets with columns from registry."""
+    datasets = []
+    for ds in registry.datasets:
+        cols = [
+            {
+                "colonna": c.name,
+                "tipo": c.type,
+                "ruolo": c.role,
+                "descrizione": c.description or "",
+            }
+            for c in (ds.columns or [])
+        ]
+        datasets.append(
+            {
+                "slug": ds.slug,
+                "name": ds.name,
+                "description": ds.description or "",
+                "period": ds.period or {},
+                "columns": cols,
+            }
+        )
+    return datasets
+
+
+def _resolve_slug(slug: str, prefix: str, years: list[int]) -> tuple[list[str], str, dict]:
+    """Resolve slug → (urls, cte_expr, info)."""
+    from lab_connectors.gcs.paths import https_url
+
+    urls = []
+    for y in years:
+        url = https_url("clean", "clean_parquet", slug=slug, year=y, prefix=prefix)
+        urls.append(url)
+
+    if len(urls) == 1:
+        cte_expr = f"SELECT * FROM read_parquet('{urls[0]}')"
+    else:
+        paths = "', '".join(urls)
+        cte_expr = f"SELECT * FROM read_parquet(['{paths}'])"
+
+    return urls, cte_expr, {"slug": slug, "years": years}
+
+
+def _build_query(sql: str, cte_expr: str, max_rows: int) -> str:
+    """Wrap user SQL with CTE and LIMIT."""
+    q = sql.strip().rstrip(";")
+    if not q.upper().startswith("WITH"):
+        q = f"WITH clean_input AS ({cte_expr}) {q}"
+    if "LIMIT" not in q.upper():
+        q += f" LIMIT {max_rows}"
+    return q
+
+
+def _default_query(slug: str) -> str:
+    """Default query for a slug."""
+    return "SELECT * FROM clean_input LIMIT 10"
