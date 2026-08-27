@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from lab_connectors.formatters import fmt_eur, fmt_num, fmt_pct
+
+pytestmark = pytest.mark.pure_unit
 
 
 class TestFmtEur:

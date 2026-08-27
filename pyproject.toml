@@ -102,6 +102,10 @@ ignore_missing_imports = true
 module = ["google.cloud", "google.cloud.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "streamlit"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--timeout=30"

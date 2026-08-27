@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from lab_connectors.duckdb.queries import years_from_registry
+
+pytestmark = pytest.mark.pure_unit
 
 
 class _FakeDataset:
