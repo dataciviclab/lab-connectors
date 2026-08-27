@@ -190,7 +190,7 @@ def years_from_registry(registry: Any) -> list[int]:
     """
     years: set[int] = set()
     for ds in registry.datasets:
-        period = ds.period if hasattr(ds, "period") else ds.get("period", {})  # type: ignore[union-attr]
+        period = ds.period if hasattr(ds, "period") else ds.get("period", {})
         start = period.get("start") if isinstance(period, dict) else getattr(period, "start", None)
         end = period.get("end") if isinstance(period, dict) else getattr(period, "end", None)
         if start is not None:
