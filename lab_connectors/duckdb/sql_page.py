@@ -87,11 +87,9 @@ def render_sql_query(
         ds_years = list(range(start, end + 1))
     elif years:
         ds_years = years
-    elif start and end:
-        # Flat file: solo l'ultimo anno (unico file su GCS)
-        ds_years = [end]
     else:
-        ds_years = list(range(2017, 2026))
+        # Flat file: solo l'anno più recente disponibile su GCS
+        ds_years = [2026]
 
     st.caption(
         f"Anni: {ds_years[0]}–{ds_years[-1]} ({len(ds_years)} anni) · "
