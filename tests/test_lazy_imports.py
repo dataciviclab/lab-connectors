@@ -57,7 +57,7 @@ class TestRootLazyExports:
             pytest.skip("FastMCP not installed (no [mcp] extra)")
 
         assert result is not None
-        assert result.__name__ == "FastMCP"
+        assert result.__name__ in {"FastMCP", "MCPServer"}
 
 
 class TestRootLazyNameResolution:

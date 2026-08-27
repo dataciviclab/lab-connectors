@@ -21,7 +21,7 @@ audit-test-markers = "lab_connectors.testing.audit_markers:main"
 
 [project.optional-dependencies]
 mcp = [
-    "mcp>=1.13,<2",
+    "mcp>=1.13,<3",
     "httpx>=0.28,<1",
     "python-dotenv>=1,<2",
 ]

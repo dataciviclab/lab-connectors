@@ -107,6 +107,103 @@ class TestClientLocal:
         with pytest.raises(FileNotFoundError):
             load_registry_local("/nonexistent/registry.json")
 
+    def test_load_local_tmp(self, tmp_path: Path) -> None:
+        reg_file = tmp_path / "registry.json"
+        reg_file.write_text('{"repo": "test-repo", "datasets": [], "marts": [], "signals": []}')
+        reg = load_registry_local(reg_file)
+        assert reg.repo == "test-repo"
+
+
+class TestLoadRegistryAutoDetect:
+    """load_registry auto-detects source type."""
+
+    def test_path_input(self, tmp_path: Path) -> None:
+        from lab_connectors.registry.client import load_registry
+
+        reg_file = tmp_path / "registry.json"
+        reg_file.write_text('{"repo": "local", "datasets": [], "marts": [], "signals": []}')
+        reg = load_registry(reg_file)
+        assert reg.repo == "local"
+
+    def test_url_input(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from lab_connectors.registry.client import load_registry
+
+        fake_resp = MagicMock()
+        fake_resp.text = '{"repo": "from-url", "datasets": [], "marts": [], "signals": []}'
+        with patch("lab_connectors.registry.client._http_get", return_value=fake_resp):
+            reg = load_registry("https://example.com/registry.json")
+        assert reg.repo == "from-url"
+
+    def test_repo_name_input(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from lab_connectors.registry.client import load_registry
+
+        fake_resp = MagicMock()
+        fake_resp.text = '{"repo": "from-repo", "datasets": [], "marts": [], "signals": []}'
+        with patch("lab_connectors.registry.client._http_get", return_value=fake_resp):
+            reg = load_registry("my-repo")
+        assert reg.repo == "from-repo"
+
+
+class TestLoadRegistryUrl:
+    """load_registry_url fetches from URL."""
+
+    def test_url_fetch(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from lab_connectors.registry.client import load_registry_url
+
+        fake_resp = MagicMock()
+        fake_resp.text = '{"repo": "url-test", "datasets": [], "marts": [], "signals": []}'
+        with patch("lab_connectors.registry.client._http_get", return_value=fake_resp):
+            reg = load_registry_url("https://example.com/r.json")
+        assert reg.repo == "url-test"
+
+
+class TestLoadRegistryGithub:
+    """load_registry_github builds GitHub raw URL."""
+
+    def test_github_default_org(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from lab_connectors.registry.client import load_registry_github
+
+        fake_resp = MagicMock()
+        fake_resp.text = '{"repo": "gh-test", "datasets": [], "marts": [], "signals": []}'
+        with patch("lab_connectors.registry.client._http_get", return_value=fake_resp) as mock_get:
+            reg = load_registry_github("my-dataset")
+        mock_get.assert_called_once_with(
+            "https://raw.githubusercontent.com/dataciviclab/my-dataset/main/registry/registry.json"
+        )
+        assert reg.repo == "gh-test"
+
+    def test_github_custom_org(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from lab_connectors.registry.client import load_registry_github
+
+        fake_resp = MagicMock()
+        fake_resp.text = '{"repo": "custom", "datasets": [], "marts": [], "signals": []}'
+        with patch("lab_connectors.registry.client._http_get", return_value=fake_resp) as mock_get:
+            reg = load_registry_github("ds", org="other-org")
+        mock_get.assert_called_once_with(
+            "https://raw.githubusercontent.com/other-org/ds/main/registry/registry.json"
+        )
+        assert reg.repo == "custom"
+
+
+class TestParseRegistry:
+    """_parse_registry handles edge cases."""
+
+    def test_invalid_json(self) -> None:
+        from lab_connectors.registry.client import _parse_registry
+
+        with pytest.raises(ValueError, match="JSON non valido"):
+            _parse_registry("not json {{{")
+
 
 class TestRegistryToDict:
     """Compat: Registry → dict."""
