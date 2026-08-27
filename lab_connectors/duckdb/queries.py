@@ -159,6 +159,7 @@ __all__ = [
     "load_mart_flat",
     "load_mart_table",
     "query_clean",
+    "query_clean_flat",
     "years_from_registry",
 ]
 
@@ -181,6 +182,29 @@ def load_mart_flat(
 
 
 # -- Registry helpers -----------------------------------------------------
+
+
+def query_clean_flat(
+    slug: str,
+    sql: str,
+    year: int = 2026,
+    *,
+    prefix: str = "",
+    table_alias: str = "clean_input",
+) -> pd.DataFrame:
+    """Esegue SQL con CTE su clean flat (senza directory anno).
+
+    Path: ``{prefix}{slug}/{slug}_{year}_clean.parquet``
+    """
+    url = _https_url(
+        "clean",
+        "clean_parquet_flat",
+        prefix=prefix,
+        slug=slug,
+        year=year,
+    )
+    cte = f"WITH {table_alias} AS (SELECT * FROM read_parquet('{url}'))"
+    return _query_df(f"{cte} {sql}")
 
 
 def years_from_registry(registry: Any) -> list[int]:

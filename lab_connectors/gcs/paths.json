@@ -9,7 +9,7 @@
   },
   "patterns": {
     "clean_parquet": "{slug}/{year}/{slug}_{year}_clean.parquet",
-    "clean_parquet_flat": "{slug}/{slug}_clean.parquet",
+    "clean_parquet_flat": "{slug}/{slug}_{year}_clean.parquet",
     "pipeline_run": "{slug}/{year}/pipeline_run.json",
     "catalog_manifest": "catalog/manifest.json",
     "catalog_signals": "catalog/catalog_signals.json",
