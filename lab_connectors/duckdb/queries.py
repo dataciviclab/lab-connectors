@@ -156,6 +156,45 @@ __all__ = [
     "count_rows",
     "load_clean",
     "load_mart_all_years",
+    "load_mart_flat",
     "load_mart_table",
     "query_clean",
+    "years_from_registry",
 ]
+
+
+# -- Mart flat (non-partitioned) -----------------------------------------
+
+
+def load_mart_flat(
+    slug: str,
+    table: str,
+    *,
+    prefix: str = "",
+) -> pd.DataFrame:
+    """Carica un mart table flat (non partizionato per anno) da GCS.
+
+    Usa il path contract: ``{prefix}{slug}/{table}.parquet`` nel bucket MART.
+    """
+    url = _https_url("mart", "mart_parquet_flat", prefix=prefix, slug=slug, table=table)
+    return _query_df(f"SELECT * FROM read_parquet('{url}')")
+
+
+# -- Registry helpers -----------------------------------------------------
+
+
+def years_from_registry(registry: Any) -> list[int]:
+    """Estrae la lista unica degli anni disponibili da un Registry.
+
+    Itera su tutti i dataset e raccoglie ``period.start`` .. ``period.end``.
+    """
+    years: set[int] = set()
+    for ds in registry.datasets:
+        period = ds.period if hasattr(ds, "period") else ds.get("period", {})
+        start = period.get("start") if isinstance(period, dict) else getattr(period, "start", None)
+        end = period.get("end") if isinstance(period, dict) else getattr(period, "end", None)
+        if start is not None:
+            years.add(int(start))
+        if end is not None:
+            years.add(int(end))
+    return sorted(years)
