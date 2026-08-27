@@ -81,10 +81,15 @@ def render_sql_query(
     period = ds_info.get("period", {})
     start = period.get("start")
     end = period.get("end")
-    if start and end:
+    multi_file = ds_info.get("multi_file", True)
+
+    if multi_file and start and end:
         ds_years = list(range(start, end + 1))
     elif years:
         ds_years = years
+    elif start and end:
+        # Flat file: solo l'ultimo anno (unico file su GCS)
+        ds_years = [end]
     else:
         ds_years = list(range(2017, 2026))
 
