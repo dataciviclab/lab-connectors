@@ -9,12 +9,14 @@
   },
   "patterns": {
     "clean_parquet": "{slug}/{year}/{slug}_{year}_clean.parquet",
+    "clean_parquet_flat": "{slug}/{slug}_clean.parquet",
     "pipeline_run": "{slug}/{year}/pipeline_run.json",
     "catalog_manifest": "catalog/manifest.json",
     "catalog_signals": "catalog/catalog_signals.json",
     "catalog_inventory_latest": "catalog_inventory/catalog_inventory_latest.parquet",
     "catalog_inventory_report": "catalog_inventory/catalog_inventory_report.json",
     "catalog_inventory_source_check": "catalog_inventory/source-check/source_check_results.parquet",
-    "mart_parquet": "{slug}/{year}/{table}.parquet"
+    "mart_parquet": "{slug}/{year}/{table}.parquet",
+    "mart_parquet_flat": "{slug}/{table}.parquet"
   }
 }
