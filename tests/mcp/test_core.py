@@ -17,7 +17,7 @@ class TestCreateMcpServer:
         """create_mcp_server deve restituire un FastMCP con nome corretto."""
         mcp = create_mcp_server("test-server", "Test instructions")
         assert mcp.name == "test-server"
-        assert type(mcp).__name__ == "FastMCP"
+        assert type(mcp).__name__ in {"FastMCP", "MCPServer"}
 
     def test_creates_fastmcp_with_instructions(self) -> None:
         """Le instructions devono essere accessibili."""
