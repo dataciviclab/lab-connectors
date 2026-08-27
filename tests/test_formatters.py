@@ -60,3 +60,14 @@ class TestFmtPct:
 
     def test_custom_decimals(self) -> None:
         assert fmt_pct(0.12345, decimals=2) == "+12.35%"
+
+    def test_pct_alread_100(self) -> None:
+        assert fmt_pct(12.34) == "+12.3%"
+
+    def test_large_pct(self) -> None:
+        assert fmt_pct(95.5) == "+95.5%"
+
+    def test_negative_pct(self) -> None:
+        result = fmt_pct(-5.0)
+        assert "5.0%" in result
+        assert "−" in result
