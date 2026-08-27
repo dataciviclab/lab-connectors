@@ -81,12 +81,13 @@ def render_sql_query(
     period = ds_info.get("period", {})
     start = period.get("start")
     end = period.get("end")
-    if start and end:
-        ds_years = list(range(start, end + 1))
-    elif years:
+
+    if years:
         ds_years = years
+    elif start and end:
+        ds_years = list(range(start, end + 1))
     else:
-        ds_years = list(range(2017, 2026))
+        ds_years = [2026]
 
     st.caption(
         f"Anni: {ds_years[0]}–{ds_years[-1]} ({len(ds_years)} anni) · "
