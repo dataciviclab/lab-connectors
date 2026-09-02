@@ -16,6 +16,40 @@ if TYPE_CHECKING:
 
 # -- Internal helpers --------------------------------------------------------
 
+# Cache per auto-detection locale (evita FS check ad ogni chiamata)
+_UNSET = object()  # sentinel fisso per "non ancora rilevato"
+_LOCAL_ROOT: str | None = _UNSET
+
+
+def _detect_local_root() -> str | None:
+    """Auto-rileva ``out/data/`` a partire dal cwd (con fallback su parent).
+
+    Cerca ``{cwd}/out/data/`` e fino a 3 livelli su.  Se trovato, lo usa
+    come local_root per tutti i parquet (pulito, no parameter in ogni
+    chiamata).
+
+    Se non trova nulla, restituisce None → GCS (comportamento default).
+    Il risultato viene cachato per non ripetere il check.
+    """
+    global _LOCAL_ROOT
+    if _LOCAL_ROOT is not _UNSET:
+        return _LOCAL_ROOT
+
+    from pathlib import Path
+
+    cwd = Path.cwd()
+    for depth in range(4):  # cwd, ../, ../../, ../../../
+        candidate = cwd
+        for _ in range(depth):
+            candidate = candidate.parent
+        data_dir = candidate / "out" / "data"
+        if data_dir.is_dir():
+            _LOCAL_ROOT = str(data_dir)
+            return _LOCAL_ROOT
+
+    _LOCAL_ROOT = None
+    return None
+
 
 def _resolve_url(
     bucket_key: str,
@@ -25,7 +59,14 @@ def _resolve_url(
     local_root: str | None = None,
     **kwargs: Any,
 ) -> str:
-    """Risolvi URL parquet: GCS (default) o locale (se local_root fornito)."""
+    """Risolvi URL parquet: GCS (default) o locale.
+
+    Se ``local_root`` è fornito esplicitamente, lo usa.
+    Altrimenti auto-rileva ``out/data/`` dal cwd.
+    """
+    if local_root is None:
+        local_root = _detect_local_root()
+
     if local_root is None:
         from lab_connectors.gcs.paths import https_url
 
