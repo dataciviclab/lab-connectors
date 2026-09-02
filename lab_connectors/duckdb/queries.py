@@ -1,17 +1,9 @@
-"""High-level query helpers per dashboard e analytics su GCS.
+"""High-level query helpers per dashboard e analytics.
 
-Fornisce funzioni per caricare clean/mart da GCS come ``pandas.DataFrame``,
+Fornisce funzioni per caricare clean/mart come ``pandas.DataFrame``,
 usando il path contract canonico di ``lab_connectors.gcs.paths``.
 
-Usage::
-
-    from lab_connectors.duckdb.queries import (
-        load_mart_table, load_mart_all_years,
-        load_clean, query_clean, count_rows,
-    )
-
-    df = load_mart_table("rna_aiuti_stato", "mart_aiuti_per_regione", 2023)
-    df = query_clean("rna_aiuti_stato", "SELECT * FROM clean_input WHERE anno = 2023")
+Supporta risoluzione GCS (default) e locale (parametro ``local_root``).
 """
 
 from __future__ import annotations
@@ -25,11 +17,24 @@ if TYPE_CHECKING:
 # -- Internal helpers --------------------------------------------------------
 
 
-def _https_url(bucket_key: str, pattern_key: str, *, prefix: str = "", **kwargs: Any) -> str:
-    """Lazy import di ``https_url`` per evitare circular import."""
-    from lab_connectors.gcs.paths import https_url
+def _resolve_url(
+    bucket_key: str,
+    pattern_key: str,
+    *,
+    prefix: str = "",
+    local_root: str | None = None,
+    **kwargs: Any,
+) -> str:
+    """Risolvi URL parquet: GCS (default) o locale (se local_root fornito)."""
+    if local_root is None:
+        from lab_connectors.gcs.paths import https_url
 
-    return https_url(bucket_key, pattern_key, prefix=prefix, **kwargs)
+        return https_url(bucket_key, pattern_key, prefix=prefix, **kwargs)
+
+    from lab_connectors.gcs.paths import resolve
+
+    rel = resolve(pattern_key, prefix=prefix, **kwargs)
+    return f"{local_root}/{bucket_key}/{rel}"
 
 
 def _query_df(sql: str) -> pd.DataFrame:
@@ -75,12 +80,22 @@ def load_mart_table(
     year: int | str,
     *,
     prefix: str = "",
+    local_root: str | None = None,
 ) -> pd.DataFrame:
-    """Carica un singolo mart table da GCS come DataFrame.
+    """Carica un singolo mart table come DataFrame.
 
     Usa il path contract: ``{prefix}{slug}/{year}/{table}.parquet`` nel bucket MART.
+    Se ``local_root`` è fornito, risolve localmente invece che su GCS.
     """
-    url = _https_url("mart", "mart_parquet", prefix=prefix, slug=slug, year=str(year), table=table)
+    url = _resolve_url(
+        "mart",
+        "mart_parquet",
+        prefix=prefix,
+        local_root=local_root,
+        slug=slug,
+        year=str(year),
+        table=table,
+    )
     return _query_df(f"SELECT * FROM read_parquet('{url}')")
 
 
@@ -90,11 +105,20 @@ def load_mart_all_years(
     years: list[int],
     *,
     prefix: str = "",
+    local_root: str | None = None,
     union_by_name: bool = True,
 ) -> pd.DataFrame:
     """Carica un mart table per tutti gli anni con UNIONByName."""
     urls = [
-        _https_url("mart", "mart_parquet", prefix=prefix, slug=slug, year=str(y), table=table)
+        _resolve_url(
+            "mart",
+            "mart_parquet",
+            prefix=prefix,
+            local_root=local_root,
+            slug=slug,
+            year=str(y),
+            table=table,
+        )
         for y in years
     ]
     return _read_parquet_urls(urls, union_by_name=union_by_name)
@@ -108,10 +132,16 @@ def load_clean(
     years: list[int],
     *,
     prefix: str = "",
+    local_root: str | None = None,
     union_by_name: bool = True,
 ) -> pd.DataFrame:
     """Carica il clean layer per uno slug, tutti gli anni richiesti."""
-    urls = [_https_url("clean", "clean_parquet", prefix=prefix, slug=slug, year=y) for y in years]
+    urls = [
+        _resolve_url(
+            "clean", "clean_parquet", prefix=prefix, local_root=local_root, slug=slug, year=y
+        )
+        for y in years
+    ]
     return _read_parquet_urls(urls, union_by_name=union_by_name)
 
 
@@ -121,14 +151,21 @@ def query_clean(
     years: list[int],
     *,
     prefix: str = "",
+    local_root: str | None = None,
     table_alias: str = "clean_input",
 ) -> pd.DataFrame:
     """Esegue SQL con CTE virtuale sul clean layer.
 
-    Risolue i path GCS per tutti gli anni e crea una CTE ``{table_alias}``
-    referenziabile nella query SQL.
+    Risolue i path per tutti gli anni e crea una CTE ``{table_alias}``
+    referenziabile nella query SQL. Se ``local_root`` è fornito, risolve
+    localmente invece che su GCS.
     """
-    urls = [_https_url("clean", "clean_parquet", prefix=prefix, slug=slug, year=y) for y in years]
+    urls = [
+        _resolve_url(
+            "clean", "clean_parquet", prefix=prefix, local_root=local_root, slug=slug, year=y
+        )
+        for y in years
+    ]
     paths = "', '".join(urls)
     cte = f"WITH {table_alias} AS (SELECT * FROM read_parquet(['{paths}'], union_by_name=true))"
     return _query_df(f"{cte} {sql}")
@@ -143,11 +180,14 @@ def count_rows(
     layer: str = "clean",
     *,
     prefix: str = "",
+    local_root: str | None = None,
 ) -> int:
-    """Conta le righe di un parquet su GCS (per verifica)."""
+    """Conta le righe di un parquet (per verifica)."""
     if layer != "clean":
         raise ValueError(f"Layer {layer!r} non supportato. Usa 'clean'.")
-    url = _https_url("clean", "clean_parquet", prefix=prefix, slug=slug, year=str(year))
+    url = _resolve_url(
+        "clean", "clean_parquet", prefix=prefix, local_root=local_root, slug=slug, year=str(year)
+    )
     row = _query_one(f"SELECT COUNT(*) AS n FROM read_parquet('{url}')")
     return int(row[0])
 
@@ -171,12 +211,16 @@ def load_mart_flat(
     table: str,
     *,
     prefix: str = "",
+    local_root: str | None = None,
 ) -> pd.DataFrame:
-    """Carica un mart table flat (non partizionato per anno) da GCS.
+    """Carica un mart table flat (non partizionato per anno).
 
     Usa il path contract: ``{prefix}{slug}/{table}.parquet`` nel bucket MART.
+    Se ``local_root`` è fornito, risolve localmente invece che su GCS.
     """
-    url = _https_url("mart", "mart_parquet_flat", prefix=prefix, slug=slug, table=table)
+    url = _resolve_url(
+        "mart", "mart_parquet_flat", prefix=prefix, local_root=local_root, slug=slug, table=table
+    )
     return _query_df(f"SELECT * FROM read_parquet('{url}')")
 
 
