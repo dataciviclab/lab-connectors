@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 # -- Internal helpers --------------------------------------------------------
 
 # Cache per auto-detection locale (evita FS check ad ogni chiamata)
-_UNSET = object()  # sentinel fisso per "non ancora rilevato"
+_UNSET: str = "__auto_detect__"  # sentinel stringa (type-safe per mypy)
 _LOCAL_ROOT: str | None = _UNSET
 
 
