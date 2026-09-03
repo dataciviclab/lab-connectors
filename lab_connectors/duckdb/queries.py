@@ -74,7 +74,8 @@ def _resolve_url(
 
     from lab_connectors.gcs.paths import resolve
 
-    rel = resolve(pattern_key, prefix=prefix, **kwargs)
+    # Local filesystem has no project prefix — only GCS buckets use it.
+    rel = resolve(pattern_key, **kwargs)
     return f"{local_root}/{bucket_key}/{rel}"
 
 
