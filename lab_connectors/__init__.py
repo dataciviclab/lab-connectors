@@ -10,6 +10,8 @@ from typing import Any
 # Usage: `from lab_connectors import HttpClient`  # resolves lazily
 
 _LAZY_SUBMODULES: dict[str, str] = {
+    # lab_connectors.branding
+    "apply_branding": "lab_connectors.branding",
     # lab_connectors.formatters
     "fmt_eur": "lab_connectors.formatters",
     "fmt_num": "lab_connectors.formatters",
