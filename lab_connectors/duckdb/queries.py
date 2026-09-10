@@ -43,7 +43,7 @@ def _detect_local_root() -> str | None:
         for _ in range(depth):
             candidate = candidate.parent
         data_dir = candidate / "out" / "data"
-        if data_dir.is_dir():
+        if data_dir.is_dir() and any(data_dir.rglob("*.parquet")):
             _LOCAL_ROOT = str(data_dir)
             return _LOCAL_ROOT
 
