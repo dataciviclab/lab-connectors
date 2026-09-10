@@ -70,3 +70,31 @@ def test_apply_branding_custom_size():
 
         call_kwargs = mock_st.logo.call_args[1]
         assert call_kwargs["size"] == "small"
+
+
+@pytest.mark.pure_unit
+def test_apply_branding_sources_text():
+    """apply_branding() renderizza sources_text nel sidebar."""
+    mock_st = MagicMock()
+
+    with patch.dict("sys.modules", {"streamlit": mock_st}):
+        from lab_connectors.branding import apply_branding
+
+        apply_branding(sources_text="Fonti: MEF · Eurostat")
+
+        caption_calls = [call[0][0] for call in mock_st.sidebar.caption.call_args_list]
+        assert any("Fonti: MEF" in c for c in caption_calls)
+
+
+@pytest.mark.pure_unit
+def test_apply_branding_no_sources_text():
+    """apply_branding() senza sources_text non aggiunge caption extra."""
+    mock_st = MagicMock()
+
+    with patch.dict("sys.modules", {"streamlit": mock_st}):
+        from lab_connectors.branding import apply_branding
+
+        apply_branding()
+
+        caption_calls = [call[0][0] for call in mock_st.sidebar.caption.call_args_list]
+        assert not any("Fonti:" in c for c in caption_calls)

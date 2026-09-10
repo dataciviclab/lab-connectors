@@ -43,7 +43,7 @@ def _detect_local_root() -> str | None:
         for _ in range(depth):
             candidate = candidate.parent
         data_dir = candidate / "out" / "data"
-        if data_dir.is_dir():
+        if data_dir.is_dir() and any(data_dir.rglob("*.parquet")):
             _LOCAL_ROOT = str(data_dir)
             return _LOCAL_ROOT
 
@@ -216,6 +216,45 @@ def query_clean(
 # -- Utility -----------------------------------------------------------------
 
 
+def detect_local_root() -> str | None:
+    """Rileva ``out/data/`` locale (public API).
+
+    Wrapper pubblico per ``_detect_local_root()``.
+    Se trovato, i path vengono risolti localmente invece che su GCS.
+
+    Returns:
+        Path ``out/data/`` se trovato, altrimenti None (usa GCS).
+
+    """
+    return _detect_local_root()
+
+
+def years_for_slug(registry: Any, slug: str) -> list[int]:
+    """Estrae la lista degli anni disponibili per uno slug specifico.
+
+    Args:
+        registry: Oggetto Registry.
+        slug: Slug del dataset.
+
+    Returns:
+        Lista ordinata di anni (es. ``[2020, 2021, 2022]``).
+
+    """
+    ds = next((d for d in registry.datasets if d.slug == slug), None)
+    if ds is None:
+        return []
+
+    period = ds.period if hasattr(ds, "period") else {}
+    if not isinstance(period, dict):
+        period = {"start": getattr(period, "start", None), "end": getattr(period, "end", None)}
+
+    start = period.get("start")
+    end = period.get("end")
+    if start is not None and end is not None:
+        return list(range(int(start), int(end) + 1))
+    return []
+
+
 def count_rows(
     slug: str,
     year: int | str,
@@ -236,11 +275,13 @@ def count_rows(
 
 __all__ = [
     "count_rows",
+    "detect_local_root",
     "load_clean",
     "load_mart_all_years",
     "load_mart_flat",
     "load_mart_table",
     "query_clean",
+    "years_for_slug",
     "years_from_registry",
 ]
 

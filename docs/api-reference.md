@@ -1,6 +1,6 @@
 # lab-connectors — API reference
 
-Dettaglio dei 7 package di `lab-connectors`. Il README principale è la panoramica.
+Dettaglio dei package di `lab-connectors`. Il README principale è la panoramica.
 
 ## `lab_connectors.http`
 
@@ -375,6 +375,76 @@ from lab_connectors.registry import load_registry, load_registry_github, registr
 reg = load_registry(Path("repo/registry/registry.json"))
 reg = load_registry_github("rna-aiuti-stato")
 d = registry_to_dict(reg)  # backward compat
+```
+
+---
+
+## `lab_connectors.dashboard`
+
+Componenti condivisi per dashboard Streamlit. Centralizza boilerplate
+ricorrente: ``set_page_config``, branding, navigation, empty state guard,
+e cached data loaders.
+
+```python
+from lab_connectors.dashboard import DashboardConfig, run_dashboard, require_data
+
+config = DashboardConfig(
+    title="Il Mio Dataset · Dashboard",
+    icon="📊",
+    repo_name="mio-repo",
+    repo_url="https://github.com/dataciviclab/mio-repo",
+    sources_text="Fonti: MEF · Eurostat",
+)
+
+pages = {
+    "": [st.Page("pages/01_Panoramica.py", title="Panoramica", icon="📊", default=True)],
+}
+
+run_dashboard(config, pages)
+```
+
+### `DashboardConfig`
+
+Dataclass con la configurazione della dashboard:
+
+| Campo | Tipo | Default | Descrizione |
+|---|---|---|---|
+| `title` | `str` | (required) | Titolo pagina (browser tab) |
+| `icon` | `str` | `"📊"` | Icona pagina (emoji) |
+| `repo_name` | `str` | `""` | Nome repo GitHub |
+| `repo_url` | `str` | `""` | URL repo GitHub |
+| `sources_text` | `str` | `""` | Riga "Fonti:" nel sidebar |
+| `layout` | `str` | `"wide"` | Layout Streamlit |
+| `sidebar_state` | `str` | `"expanded"` | Stato sidebar iniziale |
+
+### `run_dashboard(config, pages)`
+
+All-in-one: ``st.set_page_config()`` + ``apply_branding()`` + ``st.navigation()`` + ``pg.run()``.
+
+### `require_data(df, message)`
+
+Empty state guard — mostra ``st.warning`` e chiama ``st.stop()`` se il DataFrame e' vuoto.
+
+```python
+df = load_my_data()
+require_data(df)  # blocca la pagina se vuoto
+```
+
+### Sources helpers
+
+```python
+from lab_connectors.dashboard.sources import init_sources, make_cached_sources, years_for_slug
+
+# Init: carica registry, estrai anni
+registry, YEARS = init_sources(repo_root=Path(__file__).parent.parent)
+
+# Wrapper cachati
+sources = make_cached_sources(prefix="mio-repo/", slugs=["slug1", "slug2"])
+df = sources.load_mart("mart_table", 2026)
+df = sources.query("SELECT * FROM clean_input LIMIT 10")
+
+# Anni per singolo slug
+years = years_for_slug(registry, "mio_slug")
 ```
 
 ---

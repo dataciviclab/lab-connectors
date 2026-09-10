@@ -16,6 +16,7 @@ def apply_branding(
     *,
     repo_name: str = "",
     repo_url: str = "",
+    sources_text: str = "",
     size: str = "large",
 ) -> None:
     """Applica logo DataCivicLab + sidebar attribution.
@@ -25,6 +26,7 @@ def apply_branding(
     Args:
         repo_name: Nome del repo (es. "rna-aiuti-stato"). Se vuoto, solo il logo.
         repo_url: URL del repo GitHub. Se fornito con repo_name, mostra link.
+        sources_text: Testo opzionale per la riga "Fonti:" (es. "Fonti: MEF · Eurostat").
         size: Dimensione logo ("small", "medium", "large").
 
     """
@@ -44,6 +46,9 @@ def apply_branding(
         )
     else:
         st.sidebar.caption("[DataCivicLab](https://dataciviclab.org/) · CC BY 4.0")
+
+    if sources_text:
+        st.sidebar.caption(sources_text)
 
 
 __all__ = ["apply_branding"]

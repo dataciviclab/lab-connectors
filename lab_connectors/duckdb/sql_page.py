@@ -38,8 +38,9 @@ def render_sql_query(
         max_rows: Numero massimo di righe da restituire.
 
     """
-    import duckdb
     import streamlit as st
+
+    from lab_connectors.duckdb import safe_connect
 
     st.title(title)
     st.markdown(description)
@@ -155,7 +156,7 @@ def render_sql_query(
 
                 # Esegui
                 t0 = time.perf_counter()
-                with duckdb.connect() as con:
+                with safe_connect() as con:
                     df = con.sql(wrapped_sql).df()
                 elapsed = time.perf_counter() - t0
 

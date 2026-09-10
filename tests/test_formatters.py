@@ -25,6 +25,9 @@ class TestFmtEur:
     def test_compact_mln(self) -> None:
         assert fmt_eur(350_000_000, compact=True) == "€ 350 mln"
 
+    def test_compact_k(self) -> None:
+        assert fmt_eur(7_500, compact=True) == "€ 7,5 K"
+
     def test_compact_small(self) -> None:
         assert fmt_eur(50_000, compact=True) == "€ 50.000"
 

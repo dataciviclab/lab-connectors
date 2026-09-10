@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lab-connectors"
 version = "0.15.1"
-description = "HTTP client, GCS path contract, MCP server core, DuckDB connectors, and testing utilities for DataCivicLab"
+description = "HTTP client, GCS path contract, MCP server core, DuckDB connectors, Streamlit dashboard helpers, and testing utilities for DataCivicLab"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"

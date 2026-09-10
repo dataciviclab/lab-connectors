@@ -12,6 +12,10 @@ from typing import Any
 _LAZY_SUBMODULES: dict[str, str] = {
     # lab_connectors.branding
     "apply_branding": "lab_connectors.branding",
+    # lab_connectors.dashboard
+    "DashboardConfig": "lab_connectors.dashboard",
+    "require_data": "lab_connectors.dashboard",
+    "run_dashboard": "lab_connectors.dashboard",
     # lab_connectors.formatters
     "fmt_eur": "lab_connectors.formatters",
     "fmt_num": "lab_connectors.formatters",

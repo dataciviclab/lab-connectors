@@ -11,21 +11,43 @@ Usage::
 
 from __future__ import annotations
 
+import math
+
+
+def _safe_number(value: float | int | None) -> float | int | None:
+    """Handle None, NaN, pd.NA — restituisce None per valori non numerici."""
+    if value is None:
+        return None
+    if isinstance(value, float) and math.isnan(value):
+        return None
+    # pd.NA check (evita import pesante se pandas non installato)
+    try:
+        import pandas as pd
+
+        if value is pd.NA:
+            return None
+    except ImportError:
+        pass
+    return value
+
 
 def fmt_eur(value: float | int | None, *, compact: bool = False) -> str:
     """Formatta un valore come valuta EUR.
 
     Args:
         value: Valore numerico.
-        compact: Se ``True``, usa formati compatti (mld, mln).
+        compact: Se ``True``, usa formati compatti (mld, mln, K).
 
     Examples:
         >>> fmt_eur(1_500_000)
         '€ 1.500.000'
         >>> fmt_eur(2_500_000_000, compact=True)
         '€ 2,5 mld'
+        >>> fmt_eur(7_500, compact=True)
+        '€ 7,5 K'
 
     """
+    value = _safe_number(value)
     if value is None:
         return "—"
     v = float(value)
@@ -36,6 +58,8 @@ def fmt_eur(value: float | int | None, *, compact: bool = False) -> str:
             )
         if abs(v) >= 1e6:
             return f"€ {v / 1e6:,.0f}".replace(",", ".") + " mln"
+        if abs(v) >= 1e3:
+            return f"€ {v / 1e3:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".") + " K"
     return f"€ {v:,.0f}".replace(",", ".")
 
 
@@ -47,6 +71,7 @@ def fmt_num(value: float | int | None) -> str:
         '8.701'
 
     """
+    value = _safe_number(value)
     if value is None:
         return "—"
     return f"{int(value):,}".replace(",", ".")
@@ -70,6 +95,7 @@ def fmt_pct(value: float | None, *, decimals: int = 1) -> str:
         '−5.0%'
 
     """
+    value = _safe_number(value)
     if value is None:
         return "—"
     v = float(value)
