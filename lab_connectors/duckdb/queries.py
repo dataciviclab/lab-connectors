@@ -8,6 +8,7 @@ Supporta risoluzione GCS (default) e locale (parametro ``local_root``).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -21,22 +22,31 @@ _UNSET: str = "__auto_detect__"  # sentinel stringa (type-safe per mypy)
 _LOCAL_ROOT: str | None = _UNSET
 
 
-def _detect_local_root() -> str | None:
-    """Auto-rileva ``out/data/`` a partire dal cwd (con fallback su parent).
+def _detect_local_root(repo_root: Path | None = None) -> str | None:
+    """Auto-rileva ``out/data/`` per la risoluzione locale dei parquet.
 
-    Cerca ``{cwd}/out/data/`` e fino a 3 livelli su.  Se trovato, lo usa
-    come local_root per tutti i parquet (pulito, no parameter in ogni
-    chiamata).
+    Args:
+        repo_root: Root del repo da cui cercare. Se fornito, cerca solo lì
+            (più veloce e preciso). Se None, fa walking dal CWD (backward compat).
 
-    Se non trova nulla, restituisce None → GCS (comportamento default).
-    Il risultato viene cachato per non ripetere il check.
+    Returns:
+        Path ``out/data/`` se trovato, altrimenti None (usa GCS).
+
     """
     global _LOCAL_ROOT
     if _LOCAL_ROOT is not _UNSET:
         return _LOCAL_ROOT
 
-    from pathlib import Path
+    # Fast path: repo_root esplicito
+    if repo_root is not None:
+        data_dir = repo_root / "out" / "data"
+        if data_dir.is_dir() and any(data_dir.rglob("*.parquet")):
+            _LOCAL_ROOT = str(data_dir)
+            return _LOCAL_ROOT
+        _LOCAL_ROOT = None
+        return None
 
+    # Fallback: walking dal CWD (backward compat)
     cwd = Path.cwd()
     for depth in range(4):  # cwd, ../, ../../, ../../../
         candidate = cwd
@@ -57,15 +67,25 @@ def _resolve_url(
     *,
     prefix: str = "",
     local_root: str | None = None,
+    repo_root: Path | None = None,
     **kwargs: Any,
 ) -> str:
     """Risolvi URL parquet: GCS (default) o locale.
 
     Se ``local_root`` è fornito esplicitamente, lo usa.
-    Altrimenti auto-rileva ``out/data/`` dal cwd.
+    Altrimenti auto-rileva ``out/data/`` dal cwd o dal repo_root.
+
+    Args:
+        bucket_key: Chiave bucket (``clean``, ``mart``).
+        pattern_key: Chiave del pattern.
+        prefix: Prefisso opzionale (es. ``"open-politica/"``).
+        local_root: Path locale ``out/data/``. Se None, auto-detect.
+        repo_root: Root del repo per auto-detection locale. Se None, usa CWD.
+        **kwargs: Parametri del pattern (``slug``, ``year``, ``table``).
+
     """
     if local_root is None:
-        local_root = _detect_local_root()
+        local_root = _detect_local_root(repo_root)
 
     if local_root is None:
         from lab_connectors.gcs.paths import https_url

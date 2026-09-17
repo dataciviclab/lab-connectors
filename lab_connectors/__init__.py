@@ -35,6 +35,10 @@ _LAZY_SUBMODULES: dict[str, str] = {
     "get_mcp_logger": "lab_connectors.mcp",
     "guard": "lab_connectors.mcp",
     "guard_timed": "lab_connectors.mcp",
+    # lab_connectors.workspace
+    "get_workspace_root": "lab_connectors.workspace",
+    "find_repos": "lab_connectors.workspace",
+    "find_repo": "lab_connectors.workspace",
 }
 
 

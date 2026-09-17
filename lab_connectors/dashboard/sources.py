@@ -84,7 +84,7 @@ def years_for_slug(registry: Any, slug: str) -> list[int]:
 def detect_local_root(repo_root: Path | None = None) -> str | None:
     """Rileva ``out/data/`` locale (public API).
 
-    Wrapper pubblico per ``_detect_local_root()`` in ``queries.py``.
+    Wrapper pubblico per ``_detect_local_root()``.
 
     Args:
         repo_root: Root del repo da cui cercare. Se None, usa auto-detection.
@@ -95,7 +95,7 @@ def detect_local_root(repo_root: Path | None = None) -> str | None:
     """
     from lab_connectors.duckdb.queries import _detect_local_root
 
-    return _detect_local_root()
+    return _detect_local_root(repo_root)
 
 
 def make_cached_sources(
