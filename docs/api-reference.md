@@ -449,6 +449,47 @@ years = years_for_slug(registry, "mio_slug")
 
 ---
 
+## `lab_connectors.workspace`
+
+Workspace discovery layer per trovare la root del workspace e tutti i repo,
+indipendentemente dalla struttura delle directory.
+
+```python
+from lab_connectors.workspace import get_workspace_root, find_repos, find_repo
+
+# 1. Trova la root del workspace
+root = get_workspace_root()  # /home/gabry/dev/dataciviclab-workspace
+
+# 2. Scan ricorsivo per tutti i repo
+repos = find_repos()
+# {"banche-intelligence": Path("esperimenti-locali/banche-intelligence"), ...}
+
+# 3. Trova un repo specifico per slug
+repo = find_repo("rna-aiuti-stato")  # Path
+```
+
+### Marker di repo
+
+`find_repos()` cerca ricorsivamente (max 4 livelli) questi marker:
+- ``registry/registry.json`` — marker primario
+- ``datasets/`` — marker secondario per repo senza registry
+- ``candidates/`` — marker per dataset-incubator
+
+### Local root detection
+
+```python
+from lab_connectors.workspace import detect_local_root
+
+# Trova out/data/ in un repo specifico (robusto, indipendente dal cwd)
+local_root = detect_local_root(repo_root)  # "/path/to/repo/out/data"
+```
+
+### Environment variable
+
+``DCL_WORKSPACE_ROOT`` sovrascrive l'auto-detection della workspace root.
+
+---
+
 ## `lab_connectors.testing`
 
 Fake HTTP client e utility per test. Sostituisce le chiamate HTTP reali con
