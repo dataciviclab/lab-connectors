@@ -112,7 +112,7 @@ def find_repo(slug: str, root: Path | None = None) -> Path | None:
     return repos.get(slug)
 
 
-def _walk_markers(root: Path, max_depth: int = 4):
+def _walk_markers(root: Path, max_depth: int = 4):  # type: ignore[no-untyped-def]
     """Walk ricorsivo che yield i path dei marker trovati.
 
     Cerca:
@@ -121,9 +121,9 @@ def _walk_markers(root: Path, max_depth: int = 4):
     - ``candidates/`` directory (marker per dataset-incubator)
     """
     root_str = str(root)
-    seen = set()
+    seen: set[str] = set()
 
-    def _walk(current: Path, depth: int):
+    def _walk(current: Path, depth: int):  # type: ignore[no-untyped-def]
         if depth >= max_depth:
             return
         try:

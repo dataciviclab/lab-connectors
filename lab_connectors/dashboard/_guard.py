@@ -32,7 +32,7 @@ def require_data(
     """
     if df is None:
         _stop_with_warning(message)
-        return  # type: ignore[unreachable]
+        return
 
     if hasattr(df, "empty") and df.empty:
         _stop_with_warning(message)
