@@ -8,6 +8,7 @@ Supporta risoluzione GCS (default) e locale (parametro ``local_root``).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -21,21 +22,25 @@ _UNSET: str = "__auto_detect__"  # sentinel stringa (type-safe per mypy)
 _LOCAL_ROOT: str | None = _UNSET
 
 
-def _detect_local_root() -> str | None:
-    """Auto-rileva ``out/data/`` a partire dal cwd (con fallback su parent).
+def _detect_local_root(repo_root: Path | None = None) -> str | None:
+    """Auto-rileva ``out/data/`` per la risoluzione locale dei parquet.
 
-    Cerca ``{cwd}/out/data/`` e fino a 3 livelli su.  Se trovato, lo usa
-    come local_root per tutti i parquet (pulito, no parameter in ogni
-    chiamata).
+    Args:
+        repo_root: Root del repo da cui cercare. Se fornito, cerca solo lì
+            (più veloce e preciso). Se None, fa walking dal CWD (backward compat).
 
-    Se non trova nulla, restituisce None → GCS (comportamento default).
-    Il risultato viene cachato per non ripetere il check.
     """
     global _LOCAL_ROOT
+
+    # Fast path: repo_root esplicito
+    if repo_root is not None:
+        data_dir = repo_root / "out" / "data"
+        if data_dir.is_dir() and any(data_dir.rglob("*.parquet")):
+            return str(data_dir)
+        return None
+
     if _LOCAL_ROOT is not _UNSET:
         return _LOCAL_ROOT
-
-    from pathlib import Path
 
     cwd = Path.cwd()
     for depth in range(4):  # cwd, ../, ../../, ../../../
