@@ -274,22 +274,18 @@ def load_mart_flat(
 # -- Registry helpers -----------------------------------------------------
 
 
-def years_from_registry(registry: Any) -> list[int]:
+def years_from_registry(registry: Any, *, slug: str | None = None) -> list[int]:
     """Estrae la lista unica degli anni disponibili da un Registry.
 
-    Itera su tutti i dataset e raccoglie ``period.start`` .. ``period.end``.
-    I dataset con ``location.multi_file=False`` (cumulativi, single-file)
-    vengono esclusi: non hanno parquet per-anno.
+    Se ``slug`` è fornito, restituisce gli anni solo per quel dataset.
+    Altrimenti restituisce gli anni unici di tutti i dataset.
     """
     years: set[int] = set()
     for ds in registry.datasets:
-        # Salta dataset single-file (cumulativi, es. rna_misure)
-        loc = getattr(ds, "location", None)
-        if loc is not None:
-            mf = getattr(loc, "multi_file", True)
-            if not mf:
-                continue
-        period = ds.period if hasattr(ds, "period") else ds.get("period", {})
+        ds_slug = getattr(ds, "slug", None)
+        if slug is not None and ds_slug != slug:
+            continue
+        period = getattr(ds, "period", {})
         start = period.get("start") if isinstance(period, dict) else getattr(period, "start", None)
         end = period.get("end") if isinstance(period, dict) else getattr(period, "end", None)
         if start is not None:
