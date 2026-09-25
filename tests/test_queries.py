@@ -67,23 +67,39 @@ class TestYearsFromRegistry:
         reg = _FakeRegistry([ds])
         assert years_from_registry(reg) == []
 
-    def test_multi_file_false_is_excluded(self) -> None:
-        """Dataset con multi_file=False non deve contribuire agli anni."""
+    def test_multi_file_false_is_included(self) -> None:
+        """Dataset con multi_file=False contribuisce agli anni (period field)."""
         reg = _FakeRegistry(
             [
-                _FakeDataset(2017, 2026, multi_file=True),  # rna_aiuti_stato
-                _FakeDataset(1994, 2027, multi_file=False),  # rna_misure
+                _FakeDataset(2017, 2026, multi_file=True),
+                _FakeDataset(1994, 2027, multi_file=False),
             ]
         )
-        # Solo gli anni del dataset multi_file=True
-        assert years_from_registry(reg) == [2017, 2026]
+        assert years_from_registry(reg) == [1994, 2017, 2026, 2027]
 
     def test_multiple_multi_file_false(self) -> None:
-        """Più dataset single-file: tutti esclusi."""
+        """Più dataset single-file: tutti contribuiscono."""
         reg = _FakeRegistry(
             [
                 _FakeDataset(1994, 2027, multi_file=False),
                 _FakeDataset(2000, 2025, multi_file=False),
             ]
         )
-        assert years_from_registry(reg) == []
+        assert years_from_registry(reg) == [1994, 2000, 2025, 2027]
+
+    def test_filter_by_slug(self) -> None:
+        """Filter by slug returns only years for that dataset."""
+        ds1 = _FakeDataset(2020, 2026)
+        ds1.slug = "ecb_cbd2"
+        ds2 = _FakeDataset(1960, 2025)
+        ds2.slug = "wb_financial"
+        reg = _FakeRegistry([ds1, ds2])
+        assert years_from_registry(reg, slug="ecb_cbd2") == [2020, 2026]
+        assert years_from_registry(reg, slug="wb_financial") == [1960, 2025]
+
+    def test_filter_by_unknown_slug(self) -> None:
+        """Filter by unknown slug returns empty list."""
+        ds1 = _FakeDataset(2020, 2026)
+        ds1.slug = "ecb_cbd2"
+        reg = _FakeRegistry([ds1])
+        assert years_from_registry(reg, slug="unknown") == []
