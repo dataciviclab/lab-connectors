@@ -124,6 +124,35 @@ def https_url(bucket_key: str, pattern_key: str, *, prefix: str = "", **kwargs: 
 # ---------------------------------------------------------------------------
 
 
+def public_url(uri: str) -> str:
+    """Converti un URI ``gs://`` o ``s3://`` nel corrispondente URL HTTPS pubblico.
+
+    Accetta ``gs://bucket/key`` o ``s3://bucket/key`` e restituisce
+    ``https://storage.googleapis.com/bucket/key``.
+
+    Se l'input non è un URI ``gs://`` o ``s3://``, viene restituito invariato.
+
+    Args:
+        uri: URI GCS o S3 (es. ``gs://dataciviclab-clean/demo/file.parquet``).
+
+    Returns:
+        URL HTTPS pubblico.
+
+    Example::
+
+        >>> public_url("gs://dataciviclab-clean/demo/file.parquet")
+        "https://storage.googleapis.com/dataciviclab-clean/demo/file.parquet"
+        >>> public_url("s3://dataciviclab-clean/demo/file.parquet")
+        "https://storage.googleapis.com/dataciviclab-clean/demo/file.parquet"
+
+    """
+    if uri.startswith("gs://"):
+        return "https://storage.googleapis.com/" + uri[5:]
+    if uri.startswith("s3://"):
+        return "https://storage.googleapis.com/" + uri[5:]
+    return uri
+
+
 def parse_gs_url(url: str) -> tuple[str, str]:
     """Analizza un URL ``gs://`` in (bucket, key).
 
@@ -266,5 +295,6 @@ __all__ = [
     "mart_parquet",
     "parse_gs_url",
     "pipeline_run",
+    "public_url",
     "resolve",
 ]

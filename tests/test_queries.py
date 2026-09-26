@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from lab_connectors.duckdb.queries import years_from_registry
+from lab_connectors.duckdb.queries import detect_local_root, years_from_registry
 
 pytestmark = pytest.mark.pure_unit
 
@@ -103,3 +105,32 @@ class TestYearsFromRegistry:
         ds1.slug = "ecb_cbd2"
         reg = _FakeRegistry([ds1])
         assert years_from_registry(reg, slug="unknown") == []
+
+
+class TestDetectLocalRoot:
+    """detect_local_root: auto-rilevamento out/data/."""
+
+    def test_with_valid_repo_root(self, tmp_path: Path) -> None:
+        """repo_root con out/data/ e parquet: restituisce il path."""
+        data_dir = tmp_path / "out" / "data"
+        data_dir.mkdir(parents=True)
+        (data_dir / "test.parquet").write_bytes(b"")
+        result = detect_local_root(repo_root=tmp_path)
+        assert result == str(data_dir)
+
+    def test_with_empty_out_data(self, tmp_path: Path) -> None:
+        """repo_root con out/data/ vuoto: restituisce None."""
+        data_dir = tmp_path / "out" / "data"
+        data_dir.mkdir(parents=True)
+        result = detect_local_root(repo_root=tmp_path)
+        assert result is None
+
+    def test_without_out_data(self, tmp_path: Path) -> None:
+        """repo_root senza out/data/: restituisce None."""
+        result = detect_local_root(repo_root=tmp_path)
+        assert result is None
+
+    def test_none_repo_root_returns_str_or_none(self) -> None:
+        """Con repo_root=None, restituisce str o None (backward compat)."""
+        result = detect_local_root()
+        assert result is None or isinstance(result, str)

@@ -30,6 +30,7 @@ from lab_connectors.gcs.paths import (
     mart_parquet,
     parse_gs_url,
     pipeline_run,
+    public_url,
     resolve,
 )
 
@@ -392,6 +393,39 @@ class TestPathsJsonPackaging(unittest.TestCase):
     def test_paths_json_in_module_directory(self) -> None:
         paths_mod = Path(__file__).resolve().parents[1] / "lab_connectors" / "gcs"
         self.assertTrue((paths_mod / "paths.json").is_file())
+
+
+# ── public_url ──────────────────────────────────────────────────────────────
+
+
+class TestPublicUrl(unittest.TestCase):
+    """public_url: conversione gs:// e s3:// in HTTPS pubblico."""
+
+    def test_gs_to_https(self) -> None:
+        result = public_url("gs://dataciviclab-clean/demo/file.parquet")
+        self.assertEqual(
+            result, "https://storage.googleapis.com/dataciviclab-clean/demo/file.parquet"
+        )
+
+    def test_s3_to_https(self) -> None:
+        result = public_url("s3://dataciviclab-clean/demo/file.parquet")
+        self.assertEqual(
+            result, "https://storage.googleapis.com/dataciviclab-clean/demo/file.parquet"
+        )
+
+    def test_already_https_unchanged(self) -> None:
+        url = "https://storage.googleapis.com/bucket/file.parquet"
+        self.assertEqual(public_url(url), url)
+
+    def test_plain_string_unchanged(self) -> None:
+        self.assertEqual(public_url("not-a-url"), "not-a-url")
+
+    def test_empty_string_unchanged(self) -> None:
+        self.assertEqual(public_url(""), "")
+
+    def test_gs_deep_path(self) -> None:
+        result = public_url("gs://bucket/a/b/c/d.parquet")
+        self.assertEqual(result, "https://storage.googleapis.com/bucket/a/b/c/d.parquet")
 
 
 if __name__ == "__main__":
