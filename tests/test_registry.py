@@ -216,3 +216,77 @@ class TestRegistryToDict:
         assert d["repo"] == "rna-aiuti-stato"
         assert isinstance(d["datasets"], list)
         assert isinstance(d["signals"], list)
+
+
+class TestPrefixForSlug:
+    """Registry.prefix_for_slug: estrae prefix da location.path."""
+
+    def test_with_prefix(self) -> None:
+        reg = Registry.from_dict(
+            {
+                "datasets": [
+                    {
+                        "slug": "anac_bandi_gara",
+                        "location": {
+                            "path": "gs://dataciviclab-clean/appalti_pubblici/anac_bandi_gara/2026/file.parquet"
+                        },
+                    }
+                ]
+            }
+        )
+        assert reg.prefix_for_slug("anac_bandi_gara") == "appalti_pubblici/"
+
+    def test_without_prefix(self) -> None:
+        reg = Registry.from_dict(
+            {
+                "datasets": [
+                    {
+                        "slug": "senato_corpus",
+                        "location": {
+                            "path": "gs://dataciviclab-clean/senato_corpus/2026/file.parquet"
+                        },
+                    }
+                ]
+            }
+        )
+        assert reg.prefix_for_slug("senato_corpus") == ""
+
+    def test_unknown_slug(self) -> None:
+        reg = Registry.from_dict({"datasets": []})
+        assert reg.prefix_for_slug("unknown") == ""
+
+    def test_non_gs_path(self) -> None:
+        reg = Registry.from_dict(
+            {"datasets": [{"slug": "test", "location": {"path": "local/file.parquet"}}]}
+        )
+        assert reg.prefix_for_slug("test") == ""
+
+    def test_wildcard_path(self) -> None:
+        reg = Registry.from_dict(
+            {
+                "datasets": [
+                    {
+                        "slug": "siope_entrate",
+                        "location": {
+                            "path": "gs://dataciviclab-clean/siope/siope_entrate/*/siope_entrate_*_clean.parquet"
+                        },
+                    }
+                ]
+            }
+        )
+        assert reg.prefix_for_slug("siope_entrate") == "siope/"
+
+    def test_multiple_datasets(self) -> None:
+        reg = Registry.from_dict(
+            {
+                "datasets": [
+                    {
+                        "slug": "ds_a",
+                        "location": {"path": "gs://bucket/prefix_a/ds_a/2024/f.parquet"},
+                    },
+                    {"slug": "ds_b", "location": {"path": "gs://bucket/ds_b/2024/f.parquet"}},
+                ]
+            }
+        )
+        assert reg.prefix_for_slug("ds_a") == "prefix_a/"
+        assert reg.prefix_for_slug("ds_b") == ""

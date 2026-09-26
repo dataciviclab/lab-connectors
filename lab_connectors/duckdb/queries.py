@@ -25,9 +25,27 @@ _LOCAL_ROOT: str | None = _UNSET
 def _detect_local_root(repo_root: Path | None = None) -> str | None:
     """Auto-rileva ``out/data/`` per la risoluzione locale dei parquet.
 
+    .. deprecated::
+        Usa :func:`detect_local_root` (pubblico) invece di questa funzione interna.
+
     Args:
         repo_root: Root del repo da cui cercare. Se fornito, cerca solo lì
             (più veloce e preciso). Se None, fa walking dal CWD (backward compat).
+
+    """
+    return detect_local_root(repo_root=repo_root)
+
+
+def detect_local_root(repo_root: Path | None = None) -> str | None:
+    """Auto-rileva ``out/data/`` per la risoluzione locale dei parquet.
+
+    Args:
+        repo_root: Root del repo da cui cercare. Se fornito, cerca solo lì
+            (più veloce e preciso). Se None, fa walking dal CWD.
+
+    Returns:
+        Path assoluto della directory ``out/data/`` se trovata con parquet,
+        altrimenti ``None``.
 
     """
     global _LOCAL_ROOT
@@ -62,13 +80,24 @@ def _resolve_url(
     *,
     prefix: str = "",
     local_root: str | None = None,
+    registry: Any | None = None,
+    slug: str = "",
     **kwargs: Any,
 ) -> str:
     """Risolvi URL parquet: GCS (default) o locale.
 
     Se ``local_root`` è fornito esplicitamente, lo usa.
     Altrimenti auto-rileva ``out/data/`` dal cwd.
+
+    Se ``registry`` è fornito e ``prefix`` è vuoto, estrae il prefix
+    dal ``location.path`` del dataset nel registry.
     """
+    if not prefix and registry is not None and slug:
+        from lab_connectors.registry.models import Registry
+
+        if isinstance(registry, Registry) or hasattr(registry, "prefix_for_slug"):
+            prefix = registry.prefix_for_slug(slug)
+
     if local_root is None:
         local_root = _detect_local_root()
 
@@ -128,17 +157,20 @@ def load_mart_table(
     *,
     prefix: str = "",
     local_root: str | None = None,
+    registry: Any | None = None,
 ) -> pd.DataFrame:
     """Carica un singolo mart table come DataFrame.
 
     Usa il path contract: ``{prefix}{slug}/{year}/{table}.parquet`` nel bucket MART.
     Se ``local_root`` è fornito, risolve localmente invece che su GCS.
+    Se ``registry`` è fornito e ``prefix`` è vuoto, estrae il prefix dal registry.
     """
     url = _resolve_url(
         "mart",
         "mart_parquet",
         prefix=prefix,
         local_root=local_root,
+        registry=registry,
         slug=slug,
         year=str(year),
         table=table,
@@ -154,6 +186,7 @@ def load_mart_all_years(
     prefix: str = "",
     local_root: str | None = None,
     union_by_name: bool = True,
+    registry: Any | None = None,
 ) -> pd.DataFrame:
     """Carica un mart table per tutti gli anni con UNIONByName."""
     urls = [
@@ -162,6 +195,7 @@ def load_mart_all_years(
             "mart_parquet",
             prefix=prefix,
             local_root=local_root,
+            registry=registry,
             slug=slug,
             year=str(y),
             table=table,
@@ -181,11 +215,18 @@ def load_clean(
     prefix: str = "",
     local_root: str | None = None,
     union_by_name: bool = True,
+    registry: Any | None = None,
 ) -> pd.DataFrame:
     """Carica il clean layer per uno slug, tutti gli anni richiesti."""
     urls = [
         _resolve_url(
-            "clean", "clean_parquet", prefix=prefix, local_root=local_root, slug=slug, year=y
+            "clean",
+            "clean_parquet",
+            prefix=prefix,
+            local_root=local_root,
+            registry=registry,
+            slug=slug,
+            year=y,
         )
         for y in years
     ]
@@ -200,16 +241,24 @@ def query_clean(
     prefix: str = "",
     local_root: str | None = None,
     table_alias: str = "clean_input",
+    registry: Any | None = None,
 ) -> pd.DataFrame:
     """Esegue SQL con CTE virtuale sul clean layer.
 
     Risolue i path per tutti gli anni e crea una CTE ``{table_alias}``
     referenziabile nella query SQL. Se ``local_root`` è fornito, risolve
     localmente invece che su GCS.
+    Se ``registry`` è fornito e ``prefix`` è vuoto, estrae il prefix dal registry.
     """
     urls = [
         _resolve_url(
-            "clean", "clean_parquet", prefix=prefix, local_root=local_root, slug=slug, year=y
+            "clean",
+            "clean_parquet",
+            prefix=prefix,
+            local_root=local_root,
+            registry=registry,
+            slug=slug,
+            year=y,
         )
         for y in years
     ]
@@ -228,12 +277,19 @@ def count_rows(
     *,
     prefix: str = "",
     local_root: str | None = None,
+    registry: Any | None = None,
 ) -> int:
     """Conta le righe di un parquet (per verifica)."""
     if layer != "clean":
         raise ValueError(f"Layer {layer!r} non supportato. Usa 'clean'.")
     url = _resolve_url(
-        "clean", "clean_parquet", prefix=prefix, local_root=local_root, slug=slug, year=str(year)
+        "clean",
+        "clean_parquet",
+        prefix=prefix,
+        local_root=local_root,
+        registry=registry,
+        slug=slug,
+        year=str(year),
     )
     row = _query_one(f"SELECT COUNT(*) AS n FROM read_parquet('{url}')")
     return int(row[0])
@@ -241,6 +297,7 @@ def count_rows(
 
 __all__ = [
     "count_rows",
+    "detect_local_root",
     "load_clean",
     "load_mart_all_years",
     "load_mart_flat",
@@ -259,14 +316,22 @@ def load_mart_flat(
     *,
     prefix: str = "",
     local_root: str | None = None,
+    registry: Any | None = None,
 ) -> pd.DataFrame:
     """Carica un mart table flat (non partizionato per anno).
 
     Usa il path contract: ``{prefix}{slug}/{table}.parquet`` nel bucket MART.
     Se ``local_root`` è fornito, risolve localmente invece che su GCS.
+    Se ``registry`` è fornito e ``prefix`` è vuoto, estrae il prefix dal registry.
     """
     url = _resolve_url(
-        "mart", "mart_parquet_flat", prefix=prefix, local_root=local_root, slug=slug, table=table
+        "mart",
+        "mart_parquet_flat",
+        prefix=prefix,
+        local_root=local_root,
+        registry=registry,
+        slug=slug,
+        table=table,
     )
     return _query_df(f"SELECT * FROM read_parquet('{url}')")
 

@@ -210,6 +210,43 @@ class Registry:
             entities=d.get("entities", {}),
         )
 
+    def prefix_for_slug(self, slug: str) -> str:
+        """Estrae il GCS prefix da un dataset registrato.
+
+        Il prefix è la parte di path tra il bucket e lo slug nella
+        ``location.path`` del dataset. Se il dataset non ha ``location.path``
+        o il path non contiene uno slug riconoscibile, restituisce ``""``.
+
+        Esempio::
+
+            # location.path = "gs://dataciviclab-clean/appalti_pubblici/anac_bandi_gara/..."
+            registry.prefix_for_slug("anac_bandi_gara")
+            # → "appalti_pubblici/"
+
+        """
+        for ds in self.datasets:
+            if ds.slug != slug:
+                continue
+            path = ds.location.path
+            if not path.startswith("gs://"):
+                return ""
+            # gs://bucket/prefix/slug/...
+            #          ^^^^^^^^^^
+            # Trova lo slug nel path e restituisci tutto prima di esso
+            marker = f"/{slug}/"
+            idx = path.find(marker)
+            if idx < 0:
+                # prova con il pattern flat: /{slug}_{year}_clean.parquet
+                marker = f"/{slug}_"
+                idx = path.find(marker)
+            if idx < 0:
+                return ""
+            # bucket name ends at first '/', prefix starts after
+            first_slash = path.index("/", 5)  # dopo 'gs://'
+            prefix = path[first_slash + 1 : idx + 1]  # +1 per includere il '/'
+            return prefix
+        return ""
+
 
 __all__ = [
     "Column",
