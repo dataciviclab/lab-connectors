@@ -104,12 +104,12 @@ def _resolve_url(
     if local_root is None:
         from lab_connectors.gcs.paths import https_url
 
-        return https_url(bucket_key, pattern_key, prefix=prefix, **kwargs)
+        return https_url(bucket_key, pattern_key, prefix=prefix, slug=slug, **kwargs)
 
     from lab_connectors.gcs.paths import resolve
 
     # Local filesystem has no project prefix — only GCS buckets use it.
-    rel = resolve(pattern_key, **kwargs)
+    rel = resolve(pattern_key, slug=slug, **kwargs)
     return f"{local_root}/{bucket_key}/{rel}"
 
 
