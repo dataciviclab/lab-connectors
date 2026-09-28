@@ -18,6 +18,7 @@ def render_sql_query(
     years: list[int] | None = None,
     prefix: str = "",
     default_slug: str | None = None,
+    repo_filter: str | None = None,
     title: str = "🧪 Query SQL",
     description: str = (
         "Scrivi query SQL sui dataset pubblici. "
@@ -33,6 +34,7 @@ def render_sql_query(
         years: Anni disponibili (se None, presi dal registry).
         prefix: Prefisso GCS per il path contract.
         default_slug: Slug preselezionato (se None, primo del registry).
+        repo_filter: Se fornito, filtra i dataset per source/repo.
         title: Titolo della pagina.
         description: Descrizione sotto il titolo.
         max_rows: Numero massimo di righe da restituire.
@@ -46,6 +48,12 @@ def render_sql_query(
 
     # ── Dataset disponibili ────────────────────────────────────────────────────
     datasets = _get_datasets_with_columns(registry)
+
+    # ── Filtro repo (opzionale) ───────────────────────────────────────────────
+    all_sources = sorted({ds.get("source", "") for ds in datasets if ds.get("source")})
+    if repo_filter and all_sources:
+        datasets = [ds for ds in datasets if ds.get("source") == repo_filter]
+
     slug_list = [ds["slug"] for ds in datasets]
     slug_to_ds = {ds["slug"]: ds for ds in datasets}
 
@@ -72,7 +80,7 @@ def render_sql_query(
         with st.expander(f"Schema: {selected_slug}", expanded=False):
             st.dataframe(
                 pd.DataFrame(ds_info["columns"]),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -111,12 +119,12 @@ def render_sql_query(
         execute = st.button(
             "▶️ Esegui",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
     with col_hist:
         show_hist = st.button(
             "📜 Storico",
-            use_container_width=True,
+            width="stretch",
         )
 
     # ── Storico ────────────────────────────────────────────────────────────────
@@ -180,7 +188,7 @@ def render_sql_query(
                 elif n_rows > 0:
                     st.dataframe(
                         df,
-                        use_container_width=True,
+                        width="stretch",
                         column_config={
                             col: st.column_config.Column(col, width="medium")
                             for col in df.columns[:8]
@@ -242,6 +250,7 @@ def _get_datasets_with_columns(registry: Any) -> list[dict[str, Any]]:
             {
                 "slug": ds.slug,
                 "name": ds.name,
+                "source": ds.source or "",
                 "description": ds.description or "",
                 "period": ds.period or {},
                 "multi_file": ds.location.multi_file if ds.location else True,
