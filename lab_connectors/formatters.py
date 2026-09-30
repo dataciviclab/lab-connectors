@@ -54,7 +54,7 @@ def fmt_num(value: float | int | None) -> str:
     return f"{int(value):,}".replace(",", ".")
 
 
-def fmt_pct(value: float | None, *, decimals: int = 1, signed: bool = True) -> str:
+def fmt_pct(value: float | None, *, decimals: int = 1, signed: bool = False) -> str:
     """Formatta una percentuale.
 
     Accetta sia frazione (0.1234 = 12.3%) che valore percentuale (12.3 = 12.3%).
@@ -62,13 +62,13 @@ def fmt_pct(value: float | None, *, decimals: int = 1, signed: bool = True) -> s
     Args:
         value: Percentuale (0-1 o 0-100).
         decimals: Cifre decimali.
-        signed: Se ``True`` (default), aggiunge ``+`` ai positivi.
+        signed: Se ``True``, aggiunge ``+`` ai positivi (default: ``False``).
 
     Examples:
         >>> fmt_pct(0.1234)
-        '+12.3%'
-        >>> fmt_pct(0.1234, signed=False)
         '12.3%'
+        >>> fmt_pct(0.1234, signed=True)
+        '+12.3%'
         >>> fmt_pct(-0.05)
         '−5.0%'
 

@@ -45,7 +45,10 @@ class TestFmtNum:
 
 class TestFmtPct:
     def test_positive(self) -> None:
-        assert fmt_pct(0.1234) == "+12.3%"
+        assert fmt_pct(0.1234) == "12.3%"
+
+    def test_positive_signed(self) -> None:
+        assert fmt_pct(0.1234, signed=True) == "+12.3%"
 
     def test_negative(self) -> None:
         result = fmt_pct(-0.05)
@@ -56,16 +59,19 @@ class TestFmtPct:
         assert fmt_pct(None) == "—"
 
     def test_zero(self) -> None:
-        assert fmt_pct(0) == "+0.0%"
+        assert fmt_pct(0) == "0.0%"
+
+    def test_zero_signed(self) -> None:
+        assert fmt_pct(0, signed=True) == "+0.0%"
 
     def test_custom_decimals(self) -> None:
-        assert fmt_pct(0.12345, decimals=2) == "+12.35%"
+        assert fmt_pct(0.12345, decimals=2) == "12.35%"
 
     def test_pct_alread_100(self) -> None:
-        assert fmt_pct(12.34) == "+12.3%"
+        assert fmt_pct(12.34) == "12.3%"
 
     def test_large_pct(self) -> None:
-        assert fmt_pct(95.5) == "+95.5%"
+        assert fmt_pct(95.5) == "95.5%"
 
     def test_negative_pct(self) -> None:
         result = fmt_pct(-5.0)
