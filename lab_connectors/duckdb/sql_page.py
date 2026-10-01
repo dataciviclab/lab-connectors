@@ -72,7 +72,7 @@ def render_sql_query(
         with st.expander(f"Schema: {selected_slug}", expanded=False):
             st.dataframe(
                 pd.DataFrame(ds_info["columns"]),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -111,12 +111,12 @@ def render_sql_query(
         execute = st.button(
             "▶️ Esegui",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
     with col_hist:
         show_hist = st.button(
             "📜 Storico",
-            use_container_width=True,
+            width="stretch",
         )
 
     # ── Storico ────────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ def render_sql_query(
                 elif n_rows > 0:
                     st.dataframe(
                         df,
-                        use_container_width=True,
+                        width="stretch",
                         column_config={
                             col: st.column_config.Column(col, width="medium")
                             for col in df.columns[:8]
