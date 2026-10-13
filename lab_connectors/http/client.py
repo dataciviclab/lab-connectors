@@ -38,6 +38,12 @@ from lab_connectors.http.types import CircuitOpenError, HttpFallbackError, HttpR
 
 logger = logging.getLogger("lab_connectors.http")
 
+# Il SSL fallback (verify=False) è intenzionale e gestito: sopprimiamo
+# l'InsecureRequestWarning a livello di modulo una volta sola, invece di
+# chiamare disable_warnings a ogni fallback (che lascia escape in punti
+# diversi HEAD/GET/POST).
+urllib3.disable_warnings(category=InsecureRequestWarning)
+
 _USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/134.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0",
