@@ -432,3 +432,31 @@ audit-test-markers tests/
 
 Analizza i marcatori pytest nei file di test e verifica la copertura
 dei marker obbligatori (`pure_unit`, `contract`, `adapter`, `policy`, ecc.).
+
+---
+
+## `lab_connectors.textmatch`
+
+Primitive pure per la ricerca di query naturali italiane. Usate dai motori
+di find del Lab (agent-context-builder, toolkit); non fanno scoring.
+
+### `query_tokens(query) -> list[str]`
+
+Token della query senza stopword italiane, de-accentati, `_`/punteggiatura
+come separatori. `query_tokens("bandi di gara")` → `["bandi", "gara"]`.
+
+### `token_in_text(token, text) -> bool`
+
+Match per parola (morphologia leggera final-vowel: gara≈gare) o prefisso
+digitato (≥3 char). Split per parola: `"appalti"` non matcha dentro
+`"n_subappalti"`.
+
+### `query_matches(query, *texts) -> bool`
+
+True se **tutti** i token non-stopword matchano almeno uno dei testi
+(AND cross-testo — le parole di una query naturale stanno spesso in campi
+diversi). Query vuote o solo-stopword non matchano mai.
+
+### `ITALIAN_QUERY_STOPWORDS`, `query_words()`, `word_forms()`
+
+Stopword condivise; split parola; varianti morfologiche leggere.

@@ -13,6 +13,7 @@ context manager DuckDB, utility per test).
 | [`lab_connectors.gcs`](#gcs) | Client GCS (list, upload, verify) + path contract canonici |
 | [`lab_connectors.duckdb`](#duckdb) | Context manager connessioni DuckDB + query helpers |
 | [`lab_connectors.registry`](#registry) | Modelli e client per registry/registry.json |
+| [`lab_connectors.textmatch`](#textmatch) | Tokenizzazione e match di query naturali italiane |
 | [`lab_connectors.testing`](#testing) | Fake HTTP client e utility per test |
 
 Dettaglio API completo: [docs/api-reference.md](docs/api-reference.md)
@@ -133,6 +134,20 @@ for sig in reg.signals:
 ```
 
 `registry_to_dict()` converte le dataclass in dict per backward compat.
+
+## Textmatch
+
+Primitive pure per i motori di find del Lab (ACB `find`, toolkit
+`toolkit_dataset find`): tokenizzazione, stopword italiane, morfologia
+leggera (gara≈gare), match per parola su testi multipli. Nessuno scoring —
+i pesi campo restano nei singoli motori.
+
+```python
+from lab_connectors.textmatch import query_matches, query_tokens
+
+query_tokens("bandi di gara")            # ["bandi", "gara"]
+query_matches("appalti anac", "appalti", "anac")  # True (AND cross-testo)
+```
 
 ## Testing
 
