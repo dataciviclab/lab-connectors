@@ -43,7 +43,6 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["lab_connectors", "lab_connectors.*"]
-exclude = ["mcp_servers", "mcp_servers.*"]
 
 [tool.setuptools.package-data]
 "lab_connectors.gcs" = ["paths.json"]

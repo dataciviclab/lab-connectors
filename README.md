@@ -145,21 +145,15 @@ marker pytest obbligatori.
 - workflow canonici di pipeline (stanno in `toolkit`)
 - skill e playbook (stanno in `lab-ops`)
 - logica core di dataset (stanno nei repo dominio)
-- tool MCP di dominio specifici (stanno nei rispettivi repo)
+- tool MCP di dominio specifici (stanno in [`dataciviclab/dcl-mcp`](https://github.com/dataciviclab/dcl-mcp) o nei rispettivi repo)
 
-### Eccezione: `mcp_servers/github-discussions`
+### Ex `mcp_servers/github-discussions` — migrato a dcl-mcp
 
-Il server MCP per GitHub Discussions (`mcp_servers/github-discussions/`) viola
-la regola sopra perché è un server MCP di dominio, non un connector infrastrutturale.
-
-**Perché sta qui**: `lab-connectors` è l'unico repo garantito presente in ogni
-checkout del Lab (è dipendenza pip di toolkit, source-observatory,
-dataset-incubator, data-explorer, agent-context-builder, lab-dashboard,
-eurostat, italia-corpus, senato-akn, lab-ask, partecipate-monitor,
-terzo-settore-intelligence, opere-pubbliche-intelligence). Il server
-discussions serve cross-repo e un repo separato sarebbe overkill per 7 tool MCP.
-
-**Non è installabile via pip** — funziona solo da checkout.
+Il server MCP per GitHub Discussions che viveva qui (`mcp_servers/`) è
+migrato in [`dataciviclab/dcl-mcp`](https://github.com/dataciviclab/dcl-mcp)
+insieme al resto del server unico del Lab (context + discussions +
+`gcs_query`). Questa libreria resta ciò che deve essere: infrastruttura
+condivisa (HTTP, MCP core, GCS, DuckDB, registry) — non server di dominio.
 
 ## Test
 
