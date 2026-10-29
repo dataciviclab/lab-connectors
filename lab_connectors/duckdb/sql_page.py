@@ -155,15 +155,21 @@ def render_sql_query(
     if execute:
         with st.spinner(f"Esecuzione su `{selected_slug}` via DuckDB…"):
             try:
-                # Risolvi slug → URL GCS
-                urls, cte_expr, _ = _resolve_slug(
-                    selected_slug,
-                    prefix,
-                    ds_years,
-                    multi_file=ds_info.get("multi_file", True),
-                    location_path=ds_info.get("location_path", ""),
+                # layout del dataset → URL GCS. `location.path` è il contratto del
+                # toolkit; se il registry non lo espone (dataset mart-only) non c'è
+                # nessun layer clean da interrogare.
+                location_path = ds_info.get("location_path", "")
+                if not location_path:
+                    st.info(
+                        "Questo dataset non espone un layer **clean** "
+                        "(`location.path` assente nel registry, tipicamente un dataset "
+                        "mart-only): non è interrogabile qui."
+                    )
+                    return
+                urls = _urls_from_location(location_path) or _urls_from_years(
+                    selected_slug, prefix, ds_years, ds_info.get("multi_file", True)
                 )
-                wrapped_sql = _build_query(sql, cte_expr, max_rows)
+                wrapped_sql = _build_query(sql, _cte_from_urls(urls), max_rows)
 
                 # Esegui
                 t0 = time.perf_counter()
@@ -271,42 +277,39 @@ def _urls_from_location(location_path: str) -> list[str]:
     singolo file (``multi_file: false``) o un glob, come
     ``gs://bucket/prefix/<slug>/*/<slug>_*_clean.parquet``.
 
-    Il glob viene espanso **listando il bucket** (GCS JSON API, accesso anonimo ai
+    Il glob va espanso **listando il bucket** (GCS JSON API, accesso anonimo ai
     bucket pubblici): DuckDB non espande i glob su HTTPS
     (``Globs (`*`) for generic HTTP file are not supported``).
 
     Ritorna ``[]`` se il path non è ``gs://``, se il glob non produce match o se il
     listing fallisce: il chiamante ricade sulla ricostruzione per anno.
     """
-    if not location_path.startswith("gs://"):
-        return []
+    from lab_connectors.gcs.client import list_objects
+    from lab_connectors.gcs.paths import glob_to_regex, parse_gs_url, public_url
 
-    bucket, _, key = location_path[len("gs://") :].partition("/")
-    if not bucket or not key:
+    try:
+        bucket, key = parse_gs_url(location_path)
+    except ValueError:
         return []
-
-    base = f"https://storage.googleapis.com/{bucket}"
 
     # singolo file: nessun glob da espandere
     if "*" not in key:
-        return [f"{base}/{key}"]
+        return [public_url(location_path)]
 
-    from lab_connectors.gcs.client import list_objects
-    from lab_connectors.gcs.paths import glob_to_regex
-
-    # prefisso da listare = ciò che precede il primo '*', tagliato all'ultimo '/'
-    prima_stella = key.index("*")
-    prefix = key[:prima_stella]
+    # il listing si ferma al prefisso che precede il primo '*'
+    prefix = key[: key.index("*")]
     prefix = prefix[: prefix.rfind("/") + 1]
-
     try:
         items = list_objects(bucket, prefix=prefix, auth=False)
     except Exception:  # rete/permessi: meglio il fallback che un errore in pagina
         return []
 
     pattern = re.compile(glob_to_regex(key))
-    nomi = sorted(i["name"] for i in items if pattern.match(i.get("name", "")))
-    return [f"{base}/{nome}" for nome in nomi]
+    return sorted(
+        public_url(f"gs://{bucket}/{item['name']}")
+        for item in items
+        if pattern.match(item.get("name", ""))
+    )
 
 
 def _cte_from_urls(urls: list[str]) -> str:
@@ -315,44 +318,6 @@ def _cte_from_urls(urls: list[str]) -> str:
         return f"SELECT * FROM read_parquet('{urls[0]}')"
     paths = "', '".join(urls)
     return f"SELECT * FROM read_parquet(['{paths}'])"
-
-
-def _resolve_slug(
-    slug: str,
-    prefix: str,
-    years: list[int],
-    multi_file: bool = True,
-    location_path: str = "",
-) -> tuple[list[str], str, dict]:
-    """Resolve slug → (urls, cte_expr, info).
-
-    Ordine di risoluzione:
-
-    1. ``location_path`` del registry — il layout reale, scritto dal toolkit. È
-       la fonte di verità: **non** assume che il ``period`` (anni d'imposta)
-       coincida con i nomi delle cartelle (anni di presentazione/file).
-    2. ricostruzione ``{prefix}{slug}/{year}/{slug}_{year}_clean.parquet`` dagli
-       anni passati (comportamento storico, usato se ``location_path`` manca o
-       il glob non produce match).
-
-    ``multi_file=True``  → un Parquet per anno
-    ``multi_file=False`` → singolo file flat
-    """
-    from lab_connectors.gcs.paths import https_url
-
-    urls = _urls_from_location(location_path)
-    if urls:
-        return urls, _cte_from_urls(urls), {"slug": slug, "years": years, "source": "location.path"}
-
-    if multi_file:
-        urls = [
-            https_url("clean", "clean_parquet", slug=slug, year=y, prefix=prefix) for y in years
-        ]
-    else:
-        # File singolo: usa l'ultimo anno disponibile
-        urls = [https_url("clean", "clean_parquet", slug=slug, year=years[-1], prefix=prefix)]
-
-    return urls, _cte_from_urls(urls), {"slug": slug, "years": years, "source": "period"}
 
 
 def _build_query(sql: str, cte_expr: str, max_rows: int) -> str:
@@ -368,3 +333,19 @@ def _build_query(sql: str, cte_expr: str, max_rows: int) -> str:
 def _default_query(slug: str) -> str:
     """Default query for a slug."""
     return "SELECT * FROM clean_input LIMIT 10"
+
+
+def _urls_from_years(
+    slug: str, prefix: str, years: list[int], multi_file: bool = True
+) -> list[str]:
+    """URL clean dagli anni (convenzione ``{prefix}{slug}/{year}/...``).
+
+    Usata solo se ``location.path`` non risolve: è la convenzione storica, che
+    assume che gli anni passati siano anche i nomi delle cartelle. Tiene
+    ``prefix`` e ``multi_file`` significativi per i registry che non espongono
+    ``location.path``.
+    """
+    from lab_connectors.gcs.paths import https_url
+
+    anni = years if multi_file else years[-1:]
+    return [https_url("clean", "clean_parquet", slug=slug, year=y, prefix=prefix) for y in anni]
