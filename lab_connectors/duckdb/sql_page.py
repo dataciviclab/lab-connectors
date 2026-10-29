@@ -6,11 +6,14 @@ lab_connectors.registry invece di lab-dashboard.sources.load_catalog().
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from typing import Any
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def render_sql_query(
@@ -166,9 +169,25 @@ def render_sql_query(
                         "mart-only): non è interrogabile qui."
                     )
                     return
-                urls = _urls_from_location(location_path) or _urls_from_years(
-                    selected_slug, prefix, ds_years, ds_info.get("multi_file", True)
-                )
+                urls = _urls_from_location(location_path)
+                if not urls:
+                    # location.path c'è ma il layout non risolve (glob senza match,
+                    # registry disallineato). Ricadiamo sulla convenzione per anno:
+                    # per i dataset con offset 1 è il comportamento che dava 404,
+                    # quindi va reso visibile invece di restare silenzioso.
+                    logger.warning(
+                        "layout non risolto da location.path (%s): fallback sugli anni %s-%s",
+                        location_path,
+                        ds_years[0],
+                        ds_years[-1],
+                    )
+                    st.caption(
+                        "⚠️ Layout non risolto dal registry: file clean dedotti dagli anni "
+                        f"{ds_years[0]}–{ds_years[-1]}."
+                    )
+                    urls = _urls_from_years(
+                        selected_slug, prefix, ds_years, ds_info.get("multi_file", True)
+                    )
                 wrapped_sql = _build_query(sql, _cte_from_urls(urls), max_rows)
 
                 # Esegui
