@@ -6,6 +6,7 @@ lab_connectors.registry invece di lab-dashboard.sources.load_catalog().
 
 from __future__ import annotations
 
+import re
 import time
 from typing import Any
 
@@ -89,10 +90,17 @@ def render_sql_query(
     else:
         ds_years = [2026]
 
-    st.caption(
-        f"Anni: {ds_years[0]}–{ds_years[-1]} ({len(ds_years)} anni) · "
-        f"CTE ``clean_input`` risolta su {len(ds_years)} file Parquet"
-    )
+    if ds_info.get("location_path"):
+        # il layout reale viene da location.path: `period` resta solo un'etichetta
+        st.caption(
+            f"Periodo nel registry: {ds_years[0]}–{ds_years[-1]} ({len(ds_years)} anni) · "
+            "file clean risolti dal layout (``location.path``)"
+        )
+    else:
+        st.caption(
+            f"Anni: {ds_years[0]}–{ds_years[-1]} ({len(ds_years)} anni) · "
+            f"CTE ``clean_input`` risolta su {len(ds_years)} file Parquet"
+        )
 
     # ── Editor SQL ─────────────────────────────────────────────────────────────
     default_sql = st.session_state.get("sql_query_sql", _default_query(selected_slug))
@@ -149,7 +157,11 @@ def render_sql_query(
             try:
                 # Risolvi slug → URL GCS
                 urls, cte_expr, _ = _resolve_slug(
-                    selected_slug, prefix, ds_years, multi_file=ds_info.get("multi_file", True)
+                    selected_slug,
+                    prefix,
+                    ds_years,
+                    multi_file=ds_info.get("multi_file", True),
+                    location_path=ds_info.get("location_path", ""),
                 )
                 wrapped_sql = _build_query(sql, cte_expr, max_rows)
 
@@ -245,21 +257,92 @@ def _get_datasets_with_columns(registry: Any) -> list[dict[str, Any]]:
                 "description": ds.description or "",
                 "period": ds.period or {},
                 "multi_file": ds.location.multi_file if ds.location else True,
+                "location_path": ds.location.path if ds.location else "",
                 "columns": cols,
             }
         )
     return datasets
 
 
+def _urls_from_location(location_path: str) -> list[str]:
+    """URL HTTPS dei parquet clean descritti da ``location.path``.
+
+    ``location.path`` è il contratto del layout scritto dal toolkit: può essere un
+    singolo file (``multi_file: false``) o un glob, come
+    ``gs://bucket/prefix/<slug>/*/<slug>_*_clean.parquet``.
+
+    Il glob viene espanso **listando il bucket** (GCS JSON API, accesso anonimo ai
+    bucket pubblici): DuckDB non espande i glob su HTTPS
+    (``Globs (`*`) for generic HTTP file are not supported``).
+
+    Ritorna ``[]`` se il path non è ``gs://``, se il glob non produce match o se il
+    listing fallisce: il chiamante ricade sulla ricostruzione per anno.
+    """
+    if not location_path.startswith("gs://"):
+        return []
+
+    bucket, _, key = location_path[len("gs://") :].partition("/")
+    if not bucket or not key:
+        return []
+
+    base = f"https://storage.googleapis.com/{bucket}"
+
+    # singolo file: nessun glob da espandere
+    if "*" not in key:
+        return [f"{base}/{key}"]
+
+    from lab_connectors.gcs.client import list_objects
+    from lab_connectors.gcs.paths import glob_to_regex
+
+    # prefisso da listare = ciò che precede il primo '*', tagliato all'ultimo '/'
+    prima_stella = key.index("*")
+    prefix = key[:prima_stella]
+    prefix = prefix[: prefix.rfind("/") + 1]
+
+    try:
+        items = list_objects(bucket, prefix=prefix, auth=False)
+    except Exception:  # rete/permessi: meglio il fallback che un errore in pagina
+        return []
+
+    pattern = re.compile(glob_to_regex(key))
+    nomi = sorted(i["name"] for i in items if pattern.match(i.get("name", "")))
+    return [f"{base}/{nome}" for nome in nomi]
+
+
+def _cte_from_urls(urls: list[str]) -> str:
+    """CTE ``clean_input`` da una lista di URL parquet."""
+    if len(urls) == 1:
+        return f"SELECT * FROM read_parquet('{urls[0]}')"
+    paths = "', '".join(urls)
+    return f"SELECT * FROM read_parquet(['{paths}'])"
+
+
 def _resolve_slug(
-    slug: str, prefix: str, years: list[int], multi_file: bool = True
+    slug: str,
+    prefix: str,
+    years: list[int],
+    multi_file: bool = True,
+    location_path: str = "",
 ) -> tuple[list[str], str, dict]:
     """Resolve slug → (urls, cte_expr, info).
 
-    multi_file=True  → un Parquet per anno: {prefix}{slug}/{year}/{slug}_{year}_clean.parquet
-    multi_file=False → singolo file flat:   {prefix}{slug}/{slug}_clean.parquet
+    Ordine di risoluzione:
+
+    1. ``location_path`` del registry — il layout reale, scritto dal toolkit. È
+       la fonte di verità: **non** assume che il ``period`` (anni d'imposta)
+       coincida con i nomi delle cartelle (anni di presentazione/file).
+    2. ricostruzione ``{prefix}{slug}/{year}/{slug}_{year}_clean.parquet`` dagli
+       anni passati (comportamento storico, usato se ``location_path`` manca o
+       il glob non produce match).
+
+    ``multi_file=True``  → un Parquet per anno
+    ``multi_file=False`` → singolo file flat
     """
     from lab_connectors.gcs.paths import https_url
+
+    urls = _urls_from_location(location_path)
+    if urls:
+        return urls, _cte_from_urls(urls), {"slug": slug, "years": years, "source": "location.path"}
 
     if multi_file:
         urls = [
@@ -269,13 +352,7 @@ def _resolve_slug(
         # File singolo: usa l'ultimo anno disponibile
         urls = [https_url("clean", "clean_parquet", slug=slug, year=years[-1], prefix=prefix)]
 
-    if len(urls) == 1:
-        cte_expr = f"SELECT * FROM read_parquet('{urls[0]}')"
-    else:
-        paths = "', '".join(urls)
-        cte_expr = f"SELECT * FROM read_parquet(['{paths}'])"
-
-    return urls, cte_expr, {"slug": slug, "years": years}
+    return urls, _cte_from_urls(urls), {"slug": slug, "years": years, "source": "period"}
 
 
 def _build_query(sql: str, cte_expr: str, max_rows: int) -> str:
