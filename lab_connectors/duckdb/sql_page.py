@@ -6,10 +6,14 @@ lab_connectors.registry invece di lab-dashboard.sources.load_catalog().
 
 from __future__ import annotations
 
+import logging
+import re
 import time
 from typing import Any
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def render_sql_query(
@@ -89,10 +93,17 @@ def render_sql_query(
     else:
         ds_years = [2026]
 
-    st.caption(
-        f"Anni: {ds_years[0]}–{ds_years[-1]} ({len(ds_years)} anni) · "
-        f"CTE ``clean_input`` risolta su {len(ds_years)} file Parquet"
-    )
+    if ds_info.get("location_path"):
+        # il layout reale viene da location.path: `period` resta solo un'etichetta
+        st.caption(
+            f"Periodo nel registry: {ds_years[0]}–{ds_years[-1]} ({len(ds_years)} anni) · "
+            "file clean risolti dal layout (``location.path``)"
+        )
+    else:
+        st.caption(
+            f"Anni: {ds_years[0]}–{ds_years[-1]} ({len(ds_years)} anni) · "
+            f"CTE ``clean_input`` risolta su {len(ds_years)} file Parquet"
+        )
 
     # ── Editor SQL ─────────────────────────────────────────────────────────────
     default_sql = st.session_state.get("sql_query_sql", _default_query(selected_slug))
@@ -147,11 +158,37 @@ def render_sql_query(
     if execute:
         with st.spinner(f"Esecuzione su `{selected_slug}` via DuckDB…"):
             try:
-                # Risolvi slug → URL GCS
-                urls, cte_expr, _ = _resolve_slug(
-                    selected_slug, prefix, ds_years, multi_file=ds_info.get("multi_file", True)
-                )
-                wrapped_sql = _build_query(sql, cte_expr, max_rows)
+                # layout del dataset → URL GCS. `location.path` è il contratto del
+                # toolkit; se il registry non lo espone (dataset mart-only) non c'è
+                # nessun layer clean da interrogare.
+                location_path = ds_info.get("location_path", "")
+                if not location_path:
+                    st.info(
+                        "Questo dataset non espone un layer **clean** "
+                        "(`location.path` assente nel registry, tipicamente un dataset "
+                        "mart-only): non è interrogabile qui."
+                    )
+                    return
+                urls = _urls_from_location(location_path)
+                if not urls:
+                    # location.path c'è ma il layout non risolve (glob senza match,
+                    # registry disallineato). Ricadiamo sulla convenzione per anno:
+                    # per i dataset con offset 1 è il comportamento che dava 404,
+                    # quindi va reso visibile invece di restare silenzioso.
+                    logger.warning(
+                        "layout non risolto da location.path (%s): fallback sugli anni %s-%s",
+                        location_path,
+                        ds_years[0],
+                        ds_years[-1],
+                    )
+                    st.caption(
+                        "⚠️ Layout non risolto dal registry: file clean dedotti dagli anni "
+                        f"{ds_years[0]}–{ds_years[-1]}."
+                    )
+                    urls = _urls_from_years(
+                        selected_slug, prefix, ds_years, ds_info.get("multi_file", True)
+                    )
+                wrapped_sql = _build_query(sql, _cte_from_urls(urls), max_rows)
 
                 # Esegui
                 t0 = time.perf_counter()
@@ -245,37 +282,61 @@ def _get_datasets_with_columns(registry: Any) -> list[dict[str, Any]]:
                 "description": ds.description or "",
                 "period": ds.period or {},
                 "multi_file": ds.location.multi_file if ds.location else True,
+                "location_path": ds.location.path if ds.location else "",
                 "columns": cols,
             }
         )
     return datasets
 
 
-def _resolve_slug(
-    slug: str, prefix: str, years: list[int], multi_file: bool = True
-) -> tuple[list[str], str, dict]:
-    """Resolve slug → (urls, cte_expr, info).
+def _urls_from_location(location_path: str) -> list[str]:
+    """URL HTTPS dei parquet clean descritti da ``location.path``.
 
-    multi_file=True  → un Parquet per anno: {prefix}{slug}/{year}/{slug}_{year}_clean.parquet
-    multi_file=False → singolo file flat:   {prefix}{slug}/{slug}_clean.parquet
+    ``location.path`` è il contratto del layout scritto dal toolkit: può essere un
+    singolo file (``multi_file: false``) o un glob, come
+    ``gs://bucket/prefix/<slug>/*/<slug>_*_clean.parquet``.
+
+    Il glob va espanso **listando il bucket** (GCS JSON API, accesso anonimo ai
+    bucket pubblici): DuckDB non espande i glob su HTTPS
+    (``Globs (`*`) for generic HTTP file are not supported``).
+
+    Ritorna ``[]`` se il path non è ``gs://``, se il glob non produce match o se il
+    listing fallisce: il chiamante ricade sulla ricostruzione per anno.
     """
-    from lab_connectors.gcs.paths import https_url
+    from lab_connectors.gcs.client import list_objects
+    from lab_connectors.gcs.paths import glob_to_regex, parse_gs_url, public_url
 
-    if multi_file:
-        urls = [
-            https_url("clean", "clean_parquet", slug=slug, year=y, prefix=prefix) for y in years
-        ]
-    else:
-        # File singolo: usa l'ultimo anno disponibile
-        urls = [https_url("clean", "clean_parquet", slug=slug, year=years[-1], prefix=prefix)]
+    try:
+        bucket, key = parse_gs_url(location_path)
+    except ValueError:
+        return []
 
+    # singolo file: nessun glob da espandere
+    if "*" not in key:
+        return [public_url(location_path)]
+
+    # il listing si ferma al prefisso che precede il primo '*'
+    prefix = key[: key.index("*")]
+    prefix = prefix[: prefix.rfind("/") + 1]
+    try:
+        items = list_objects(bucket, prefix=prefix, auth=False)
+    except Exception:  # rete/permessi: meglio il fallback che un errore in pagina
+        return []
+
+    pattern = re.compile(glob_to_regex(key))
+    return sorted(
+        public_url(f"gs://{bucket}/{item['name']}")
+        for item in items
+        if pattern.match(item.get("name", ""))
+    )
+
+
+def _cte_from_urls(urls: list[str]) -> str:
+    """CTE ``clean_input`` da una lista di URL parquet."""
     if len(urls) == 1:
-        cte_expr = f"SELECT * FROM read_parquet('{urls[0]}')"
-    else:
-        paths = "', '".join(urls)
-        cte_expr = f"SELECT * FROM read_parquet(['{paths}'])"
-
-    return urls, cte_expr, {"slug": slug, "years": years}
+        return f"SELECT * FROM read_parquet('{urls[0]}')"
+    paths = "', '".join(urls)
+    return f"SELECT * FROM read_parquet(['{paths}'])"
 
 
 def _build_query(sql: str, cte_expr: str, max_rows: int) -> str:
@@ -291,3 +352,19 @@ def _build_query(sql: str, cte_expr: str, max_rows: int) -> str:
 def _default_query(slug: str) -> str:
     """Default query for a slug."""
     return "SELECT * FROM clean_input LIMIT 10"
+
+
+def _urls_from_years(
+    slug: str, prefix: str, years: list[int], multi_file: bool = True
+) -> list[str]:
+    """URL clean dagli anni (convenzione ``{prefix}{slug}/{year}/...``).
+
+    Usata solo se ``location.path`` non risolve: è la convenzione storica, che
+    assume che gli anni passati siano anche i nomi delle cartelle. Tiene
+    ``prefix`` e ``multi_file`` significativi per i registry che non espongono
+    ``location.path``.
+    """
+    from lab_connectors.gcs.paths import https_url
+
+    anni = years if multi_file else years[-1:]
+    return [https_url("clean", "clean_parquet", slug=slug, year=y, prefix=prefix) for y in anni]
