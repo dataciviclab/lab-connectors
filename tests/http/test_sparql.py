@@ -19,8 +19,11 @@ from lab_connectors.http.sparql import (
     _ensure_str_list,
     _looks_like_csv,
     _parse_sparql_xml,
+    curl_sparql,
     discover_graphs,
     execute_sparql,
+    execute_sparql_rows,
+    execute_sparql_rows_curl,
     fetch_csv,
     infer_schema,
 )
@@ -402,3 +405,112 @@ class TestExecuteSparqlErrorHandling:
         ):
             result = execute_sparql("https://ex.test/sparql", "SELECT * WHERE { }")
             assert result == []
+
+
+@pytest.mark.pure_unit
+class TestExecuteSparqlRows:
+    """execute_sparql_rows: bindings piatti per gli script di estrazione."""
+
+    @pytest.mark.pure_unit
+    def test_flattens_bindings(self):
+        with patch(
+            "lab_connectors.http.sparql.execute_sparql",
+            return_value=[
+                {
+                    "a": {"type": "uri", "value": "http://x/1"},
+                    "b": {"type": "literal", "value": "2"},
+                },
+                {
+                    "a": {"type": "uri", "value": "http://x/3"},
+                    "b": {"type": "literal", "value": "4"},
+                },
+            ],
+        ):
+            rows = execute_sparql_rows("https://ex.test/sparql", "SELECT ?a ?b WHERE { }")
+        assert rows == [{"a": "http://x/1", "b": "2"}, {"a": "http://x/3", "b": "4"}]
+
+
+@pytest.mark.pure_unit
+class TestCurlSparql:
+    """curl_sparql: parsing di status/content-type e gestione curl assente."""
+
+    @pytest.mark.pure_unit
+    def test_parses_status_and_content_type(self):
+        from unittest.mock import MagicMock
+
+        fake = MagicMock(
+            returncode=0,
+            stdout=b'{"a":1}\n200|application/sparql-results+json',
+            stderr=b"",
+        )
+        with patch("lab_connectors.http.sparql.subprocess.run", return_value=fake):
+            out = curl_sparql("https://ex.test/sparql", "SELECT * WHERE { }", "application/json", 5)
+        assert out == (200, b'{"a":1}', "application/sparql-results+json")
+
+    @pytest.mark.pure_unit
+    def test_returns_none_when_curl_missing(self):
+        with patch("lab_connectors.http.sparql.subprocess.run", side_effect=FileNotFoundError):
+            out = curl_sparql("https://ex.test/sparql", "SELECT * WHERE { }", "application/json", 5)
+        assert out is None
+
+    @pytest.mark.pure_unit
+    def test_rows_curl_parses_json(self):
+        with patch(
+            "lab_connectors.http.sparql.curl_sparql",
+            return_value=(
+                200,
+                b'{"results":{"bindings":[{"x":{"value":"1"}}]}}',
+                "application/json",
+            ),
+        ):
+            rows = execute_sparql_rows_curl("https://ex.test/sparql", "SELECT ?x WHERE { }")
+        assert rows == [{"x": "1"}]
+
+    @pytest.mark.pure_unit
+    def test_rows_curl_raises_on_non_json(self):
+        with patch(
+            "lab_connectors.http.sparql.curl_sparql",
+            return_value=(200, b"<html>blocked</html>", "text/html"),
+        ):
+            with pytest.raises(RuntimeError, match="risposta non JSON"):
+                execute_sparql_rows_curl("https://ex.test/sparql", "SELECT ?x WHERE { }")
+
+    @pytest.mark.pure_unit
+    def test_rows_curl_raises_on_http_error(self):
+        with patch(
+            "lab_connectors.http.sparql.curl_sparql",
+            return_value=(403, b"Forbidden", "text/html"),
+        ):
+            with pytest.raises(RuntimeError, match="HTTP 403"):
+                execute_sparql_rows_curl("https://ex.test/sparql", "SELECT ?x WHERE { }")
+
+    @pytest.mark.pure_unit
+    @pytest.mark.parametrize("method", ["POST", "GET"])
+    def test_curl_sparql_argv_is_safe(self, method):
+        """Guardrail: niente shell, `--` prima dell'endpoint, query in un solo argomento.
+
+        Protegge l'invariante di sicurezza: un revert a `shell=True` o la
+        rimozione del `--` (endpoint che inizia con `-`) deve rompere il test,
+        non passare silenziosamente.
+        """
+        from unittest.mock import MagicMock
+
+        query = "SELECT * WHERE { ?s ?p ?o }"
+        fake = MagicMock(
+            returncode=0,
+            stdout=b'{"a":1}\n200|application/sparql-results+json',
+            stderr=b"",
+        )
+        with patch("lab_connectors.http.sparql.subprocess.run", return_value=fake) as run:
+            curl_sparql("https://ex.test/sparql", query, "application/json", 5, method=method)
+
+        args, kwargs = run.call_args
+        cmd = args[0]
+        assert isinstance(cmd, list)
+        assert not kwargs.get("shell")
+        assert cmd[-2:] == ["--", "https://ex.test/sparql"]
+        idx = cmd.index("--data-urlencode")
+        assert cmd[idx + 1] == f"query={query}"
+        # la query viaggia in un solo argomento, non spezzata
+        assert sum(part.startswith("query=") for part in cmd) == 1
+        assert ("-G" in cmd) is (method == "GET")
