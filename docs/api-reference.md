@@ -45,12 +45,24 @@ consumer. Usa direttamente `concurrent.futures.ThreadPoolExecutor` con `HttpClie
 Esecuzione di query SPARQL su endpoint HTTPS, con paginazione automatica e fetch CSV.
 
 ```python
-from lab_connectors.http.sparql import execute_sparql, discover_graphs
+from lab_connectors.http.sparql import (
+    curl_sparql,
+    discover_graphs,
+    execute_sparql,
+    execute_sparql_rows,
+    execute_sparql_rows_curl,
+)
 
 results = execute_sparql(
     "https://semantic.istat.it/sparql",
     "SELECT * WHERE { ?s ?p ?o } LIMIT 10",
 )
+# Binding piatti {variabile: valore} — forma comoda per gli script
+rows = execute_sparql_rows("https://semantic.istat.it/sparql", "SELECT ?s WHERE { }")
+
+# Endpoint che bloccano il TLS fingerprint delle librerie Python (WAF)
+rows = execute_sparql_rows_curl("https://dati.senato.it/sparql", "SELECT ?s WHERE { }")
+
 graphs = discover_graphs("https://semantic.istat.it/sparql")
 ```
 
