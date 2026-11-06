@@ -28,6 +28,7 @@ def render_sql_query(
         "viene risolta automaticamente sui Parquet GCS."
     ),
     max_rows: int = 1000,
+    templates: dict[str, str | None] | None = None,
 ) -> None:
     """Render a complete SQL query page.
 
@@ -39,6 +40,9 @@ def render_sql_query(
         title: Titolo della pagina.
         description: Descrizione sotto il titolo.
         max_rows: Numero massimo di righe da restituire.
+        templates: Query predefinite mostrate in un selectbox (nome → SQL,
+            ``None`` = query di default). Se presente, il template scelto
+            diventa il valore iniziale dell'editor.
 
     """
     import streamlit as st
@@ -105,8 +109,16 @@ def render_sql_query(
             f"CTE ``clean_input`` risolta su {len(ds_years)} file Parquet"
         )
 
+    # ── Template (opzionali) ───────────────────────────────────────────────────
+    default_sql = _default_query(selected_slug)
+    if templates:
+        template_name = st.selectbox("Template", list(templates.keys()))
+        template_sql = templates.get(template_name)
+        if template_sql:
+            default_sql = template_sql
+
     # ── Editor SQL ─────────────────────────────────────────────────────────────
-    default_sql = st.session_state.get("sql_query_sql", _default_query(selected_slug))
+    default_sql = st.session_state.get("sql_query_sql", default_sql)
     sql = st.text_area(
         "SQL",
         value=default_sql,
