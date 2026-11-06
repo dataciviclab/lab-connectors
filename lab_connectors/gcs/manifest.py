@@ -14,6 +14,7 @@ gs://dataciviclab-clean/registry/gcs_manifest.json.
 from __future__ import annotations
 
 import json
+import warnings
 from datetime import UTC, datetime
 from typing import Any
 
@@ -25,14 +26,26 @@ MANIFEST_URL = f"https://storage.googleapis.com/{CLEAN_BUCKET}/{MANIFEST_PATH}"
 SCAN_BUCKETS = [CLEAN_BUCKET, MART_BUCKET]
 
 
+_DEPRECATION_MSG = (
+    "gcs_manifest è deprecato: usa i registry.json dei repo per gli artifact e "
+    "gcs.paths.location_urls()/object_exists() per l'esistenza dei file."
+)
+
+
 def build_manifest() -> dict[str, Any]:
     """Scandisce i bucket pubblici e produce il manifest completo.
+
+    .. deprecated::
+        Usa i registry.json dei repo + ``location_urls()``; il manifest non ha
+        più consumer nel Lab.
 
     Returns:
         Dict con: generated_at, buckets, file_count, total_size_bytes, files.
         Ogni file: { url (s3://), slug, bucket, year, path, size_bytes, updated }.
 
     """
+    warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
+
     files: list[dict[str, Any]] = []
     total_size = 0
 
@@ -74,7 +87,12 @@ def build_manifest() -> dict[str, Any]:
 
 
 def upload_manifest(manifest: dict[str, Any]) -> None:
-    """Carica il manifest su GCS (richiede SDK autenticato)."""
+    """Carica il manifest su GCS (richiede SDK autenticato).
+
+    .. deprecated::
+        Il manifest è in dismissione: nessun consumer nel Lab.
+    """
+    warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
     content = json.dumps(manifest, indent=2, ensure_ascii=False)
     upload_string(content, CLEAN_BUCKET, MANIFEST_PATH, content_type="application/json")
 
@@ -93,7 +111,11 @@ def read_manifest(url: str | None = None) -> dict[str, Any]:
         ValueError: se il JSON è malformato.
         TimeoutError: se la richiesta scade.
 
+    .. deprecated::
+        Usa i registry.json dei repo + ``location_urls()``.
+
     """
+    warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
     fetch_url = url or MANIFEST_URL
     status, text = _fetch(fetch_url)
 

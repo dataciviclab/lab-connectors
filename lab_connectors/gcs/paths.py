@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import warnings
 from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
@@ -366,7 +367,17 @@ def pipeline_run(slug: str, year: int | str, *, prefix: str = "") -> str:
 
 
 def catalog_manifest() -> str:
-    """Path ``catalog/manifest.json``."""
+    """Path ``catalog/manifest.json``.
+
+    .. deprecated::
+        L'artifact non è più aggiornato (ultimo: 2026-08-05): i consumer usano
+        i ``registry.json`` dei repo.
+    """
+    warnings.warn(
+        "catalog/manifest.json è deprecato: usa i registry.json dei repo.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return resolve("catalog_manifest")
 
 
