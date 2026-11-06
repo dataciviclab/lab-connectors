@@ -1,8 +1,13 @@
 """Smoke test: HttpClient contro un endpoint reale del Lab.
 
-Questo test fa una chiamata HTTP GET reale al manifest del catalogo
-su GCS pubblico per verificare che ``HttpClient`` funzioni end-to-end
-con la rete reale — DNS, TLS, response parsing, timeout.
+Questo test fa una chiamata HTTP GET reale al manifest GCS dei bucket
+pubblici (``registry/gcs_manifest.json``, rigenerato ogni giorno) per
+verificare che ``HttpClient`` funzioni end-to-end con la rete reale —
+DNS, TLS, response parsing, timeout.
+
+Nota: ``catalog/manifest.json`` non è più aggiornato (ultimo: 2026-08-05)
+ed è stato sostituito dai ``registry.json`` dei repo; il manifest vivo dei
+bucket è ``registry/gcs_manifest.json``.
 
 Il test è **skippato di default** (usa ``SMOKE_TESTS=1`` per abilitarlo)
 ed è pensato per essere eseguito su schedule (settimanale) o on-demand.
@@ -21,24 +26,25 @@ import pytest
 from lab_connectors.http import HttpClient
 from lab_connectors.http.types import HttpResult
 
-MANIFEST_URL = "https://storage.googleapis.com/dataciviclab-clean/catalog/manifest.json"
+MANIFEST_URL = "https://storage.googleapis.com/dataciviclab-clean/registry/gcs_manifest.json"
 
 
 @pytest.mark.smoke
-def test_get_catalog_manifest() -> None:
-    """GET catalog/manifest.json → 200 + JSON con 'items' e 'generated_at'."""
+def test_get_gcs_manifest() -> None:
+    """GET registry/gcs_manifest.json → 200 + JSON con 'files' non vuoto."""
     _require_smoke_env()
 
-    client = HttpClient(timeout=15, max_retries=1)
+    client = HttpClient(timeout=20, max_retries=1)
     result = client.get(MANIFEST_URL)
 
     _assert_result_ok(result)
     assert result.response is not None
     data = result.response.json()
     assert isinstance(data, dict)
-    assert "items" in data, "manifest.json deve contenere 'items'"
-    assert "generated_at" in data, "manifest.json deve contenere 'generated_at'"
-    assert isinstance(data["items"], list)
+    assert "files" in data, "gcs_manifest.json deve contenere 'files'"
+    assert "generated_at" in data, "gcs_manifest.json deve contenere 'generated_at'"
+    assert isinstance(data["files"], list)
+    assert data["files"], "gcs_manifest.json non deve essere vuoto"
 
 
 # ------------------------------------------------------------------

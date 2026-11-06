@@ -8,6 +8,8 @@ Logo centralizzato + sidebar attribution. Uso::
 
 from __future__ import annotations
 
+from typing import Literal
+
 _LOGO_URL = "https://raw.githubusercontent.com/dataciviclab/dataciviclab/main/public/logo.jpg"
 _ICON_URL = "https://raw.githubusercontent.com/dataciviclab/dataciviclab/main/public/icon.svg"
 
@@ -16,7 +18,7 @@ def apply_branding(
     *,
     repo_name: str = "",
     repo_url: str = "",
-    size: str = "large",
+    size: Literal["small", "medium", "large"] = "large",
 ) -> None:
     """Applica logo DataCivicLab + sidebar attribution.
 

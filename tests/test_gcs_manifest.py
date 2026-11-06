@@ -3,20 +3,11 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from lab_connectors.gcs.manifest import build_manifest, read_manifest
-
-
-def _fake_urlopen(data: bytes) -> MagicMock:
-    """Crea un mock di urlopen che funge da context manager."""
-    resp = MagicMock()
-    resp.read.return_value = data
-    cm = MagicMock()
-    cm.__enter__.return_value = resp
-    return cm
 
 
 class TestBuildManifest:
@@ -75,9 +66,11 @@ class TestReadManifest:
     def test_read_manifest_success(self):
         """JSON valido restituisce dict."""
         fake_data = {"generated_at": "2026-06-21", "file_count": 10, "files": []}
-        fake_urlopen = _fake_urlopen(json.dumps(fake_data).encode("utf-8"))
 
-        with patch("urllib.request.urlopen", return_value=fake_urlopen):
+        with patch(
+            "lab_connectors.gcs.manifest._fetch",
+            return_value=(200, json.dumps(fake_data)),
+        ):
             result = read_manifest("https://example.com/manifest.json")
 
         assert result["file_count"] == 10
@@ -85,48 +78,34 @@ class TestReadManifest:
     @pytest.mark.contract
     def test_read_manifest_404(self):
         """404 solleva FileNotFoundError."""
-        from urllib.error import HTTPError
-
-        fake_error = HTTPError("https://example.com/404", 404, "Not Found", {}, None)
-
-        with patch("urllib.request.urlopen", side_effect=fake_error):
+        with patch("lab_connectors.gcs.manifest._fetch", return_value=(404, "")):
             with pytest.raises(FileNotFoundError):
                 read_manifest("https://example.com/404")
 
     @pytest.mark.contract
     def test_read_manifest_403(self):
         """403 solleva FileNotFoundError."""
-        from urllib.error import HTTPError
-
-        fake_error = HTTPError("https://example.com/403", 403, "Forbidden", {}, None)
-
-        with patch("urllib.request.urlopen", side_effect=fake_error):
+        with patch("lab_connectors.gcs.manifest._fetch", return_value=(403, "")):
             with pytest.raises(FileNotFoundError):
                 read_manifest("https://example.com/403")
 
     @pytest.mark.contract
     def test_read_manifest_500(self):
         """500 solleva RuntimeError."""
-        from urllib.error import HTTPError
-
-        fake_error = HTTPError("https://example.com/500", 500, "Server Error", {}, None)
-
-        with patch("urllib.request.urlopen", side_effect=fake_error):
+        with patch("lab_connectors.gcs.manifest._fetch", return_value=(500, "")):
             with pytest.raises(RuntimeError):
                 read_manifest("https://example.com/500")
 
     @pytest.mark.contract
     def test_read_manifest_corrupted_json(self):
         """JSON malformato solleva ValueError."""
-        fake_urlopen = _fake_urlopen(b"not json at all")
-
-        with patch("urllib.request.urlopen", return_value=fake_urlopen):
+        with patch("lab_connectors.gcs.manifest._fetch", return_value=(200, "not json")):
             with pytest.raises(ValueError, match="corrotto"):
                 read_manifest("https://example.com/corrupted")
 
     @pytest.mark.contract
     def test_read_manifest_timeout(self):
         """Timeout solleva TimeoutError."""
-        with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+        with patch("lab_connectors.gcs.manifest._fetch", side_effect=TimeoutError("timed out")):
             with pytest.raises(TimeoutError):
                 read_manifest("https://example.com/timeout")

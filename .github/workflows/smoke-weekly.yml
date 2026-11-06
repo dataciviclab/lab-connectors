@@ -36,7 +36,7 @@ jobs:
               repo: context.repo.repo,
               state: "open",
             });
-            const existing = issues.find(i => i.title.includes("Catalog manifest smoke test failed"));
+            const existing = issues.find(i => i.title.includes("GCS manifest smoke test failed"));
             if (existing) {
               console.log("Issue already open: #" + existing.number);
               return;
@@ -44,12 +44,12 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: "⚠️ Catalog manifest smoke test failed",
-              body: `The weekly smoke test (GET catalog/manifest.json) failed at ${new Date().toISOString()}.
+              title: "⚠️ GCS manifest smoke test failed",
+              body: `The weekly smoke test (GET registry/gcs_manifest.json) failed at ${new Date().toISOString()}.
 
             This likely means:
             - GCS bucket dataciviclab-clean is unreachable
-            - The manifest.json contract has changed
+            - The gcs_manifest.json contract has changed
             - There is a TLS or network issue
 
             Investigate and either fix the endpoint or update the test.

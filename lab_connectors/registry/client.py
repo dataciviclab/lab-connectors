@@ -80,16 +80,14 @@ def _parse_registry(text: str) -> Registry:
 
 
 def _http_get(url: str) -> Any:
-    """HTTP GET con retry."""
-    import requests
-    from requests.adapters import HTTPAdapter
-    from urllib3.util.retry import Retry
+    """HTTP GET con ``HttpClient`` (retry, SSL fallback, UA uniforme)."""
+    from lab_connectors.http import HttpClient
 
-    session = requests.Session()
-    retry = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
-    session.mount("https://", HTTPAdapter(max_retries=retry))
-    resp = session.get(url, timeout=15)
-    resp.raise_for_status()
+    result = HttpClient(timeout=15, max_retries=3).get(url)
+    resp = result.response
+    if resp is None or resp.status_code >= 400:
+        status = resp.status_code if resp is not None else "no response"
+        raise RuntimeError(f"Registry non raggiungibile ({url}): HTTP {status} ({result.err})")
     return resp
 
 

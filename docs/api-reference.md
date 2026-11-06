@@ -253,6 +253,30 @@ manifest = catalog_manifest()
 parquet = mart_parquet(slug="demo", year=2024, table="summary")
 ```
 
+#### `location_urls(location, years=None)` — location del registry → URL
+
+Contratto unico per trasformare la `location` di un dataset (dict del registry
+o dataclass `Location`) in URL leggibili da DuckDB.
+
+```python
+from lab_connectors.gcs.paths import location_urls
+
+# Path puntuale (multi_file: false)
+location_urls({"path": "gs://dataciviclab-clean/p/s/2024/s_2024_clean.parquet"})
+# → ["https://storage.googleapis.com/dataciviclab-clean/p/s/2024/s_2024_clean.parquet"]
+
+# Glob multi-anno: il '*' diventa l'anno
+location_urls({"path": "gs://dataciviclab-clean/p/s/*/s_*_clean.parquet"}, years=[2024, 2025])
+# → [ ".../s/2024/s_2024_clean.parquet", ".../s/2025/s_2025_clean.parquet" ]
+
+# Glob senza anni: espansione via listing del bucket
+location_urls({"path": "gs://dataciviclab-clean/p/s/*/s_*_clean.parquet"})
+```
+
+`expand_glob(uri)` è la primitiva che lista il bucket e filtra con
+`glob_to_regex`; solleva `RuntimeError` se il listing fallisce (il chiamante
+può ricadere sulla ricostruzione per anno).
+
 ---
 
 ## `lab_connectors.duckdb`
@@ -353,6 +377,21 @@ df = query_clean(
 
 Conta le righe di un parquet su GCS.
 
+#### `source` e `fallback_remote` — risoluzione locale/GCS
+
+Tutte le funzioni di caricamento accettano:
+
+| Parametro | Default | Comportamento |
+|---|---|---|
+| `source` | `"auto"` | `auto`: locale se `out/data` esiste, altrimenti GCS. `local`: solo locale (errore se manca). `gcs`: solo GCS. |
+| `fallback_remote` | `False` | Se il file locale manca (`out/data` parziale), riprova una volta su GCS. |
+| `registry` | `None` | Se `prefix` è vuoto, deriva il prefix GCS da `location.path`. |
+
+```python
+df = load_mart_table("senato_corpus", "mart_atti", 2026, fallback_remote=True)
+df = load_mart_table("senato_corpus", "mart_atti", 2026, source="gcs")
+```
+
 ---
 
 ## `lab_connectors.registry`
@@ -388,6 +427,26 @@ reg = load_registry(Path("repo/registry/registry.json"))
 reg = load_registry_github("rna-aiuti-stato")
 d = registry_to_dict(reg)  # backward compat
 ```
+
+### Utility condivise
+
+```python
+from lab_connectors.registry import (
+    latest_published_year,
+    published_years,
+    to_url_slug,
+    year_range,
+)
+```
+
+| Funzione | Cosa fa |
+|---|---|
+| `year_range(registry, *, slug=None, local_root=None)` | Tutti gli anni del `period` (non solo start/end), con filtro opzionale sui file locali |
+| `published_years(registry, slug, *, probe=None)` | Anni con partizione presente su GCS (path puntuale senza rete; glob verificato con HEAD) |
+| `latest_published_year(registry, slug, *, prefix=None, probe=None)` | Anno più recente pubblicato, con fallback HEAD su `clean_parquet` |
+| `to_url_slug(slug)` | Slug interno → slug URL pubblico Explorer (override editoriali inclusi) |
+
+`probe` è iniettabile (`gs_uri -> bool`): i test non toccano la rete.
 
 ---
 
