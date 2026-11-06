@@ -41,6 +41,16 @@ class _FakeResponse:
             raise requests.HTTPError(f"HTTP {self.status_code}")
 
 
+@pytest.fixture(autouse=True)
+def _clear_glob_cache():
+    """Evita che la cache di expand_glob nasconda i mock di list_objects."""
+    from lab_connectors.gcs.paths import clear_glob_cache
+
+    clear_glob_cache()
+    yield
+    clear_glob_cache()
+
+
 @pytest.fixture
 def fake_http():
     """Fixture che restituisce un FakeHttpClient pulito.
