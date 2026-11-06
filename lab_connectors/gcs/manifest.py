@@ -3,8 +3,12 @@
 Generato periodicamente da scripts/scan_gcs_manifest.py e pubblicato su
 gs://dataciviclab-clean/registry/gcs_manifest.json.
 
-Qualsiasi repo del Lab può leggere il manifest per avere la lista completa
-dei file senza chiamate GCS live.
+.. deprecated::
+    In dismissione: è stato sostituito dai ``registry.json`` dei repo per la
+    risoluzione degli artifact e, per l'esistenza dei file, da
+    ``gcs.paths.location_urls()`` / ``gcs.client.object_exists``.
+    L'unico consumer (``data-explorer``) migrerà a ``location_urls``; non
+    usare il manifest in nuovi consumer.
 """
 
 from __future__ import annotations

@@ -74,8 +74,11 @@ mcp = create_mcp_server(
 Client GCS unificato con 3 modalità (SDK, HTTP API, auto-fallback) e **path
 contract canonici** — i path di tutti gli artifact del Lab su GCS, risolvibili
 con `resolve()`, `gs_url()`, `https_url()`. Include upload/verifica
-(`upload_file`, `upload_string`, `object_exists`) e il manifest GCS
-(`read_manifest`), indice centralizzato dei file sui bucket pubblici.
+(`upload_file`, `upload_string`, `object_exists`).
+
+> **Manifest in dismissione.** `read_manifest()` / `gcs_manifest.json` sono
+> sostituiti dai `registry.json` dei repo e da `location_urls()`; restano solo
+> per il consumer storico (`data-explorer`) e non vanno usati in nuovi consumer.
 
 ```python
 from lab_connectors.gcs.paths import resolve, location_urls

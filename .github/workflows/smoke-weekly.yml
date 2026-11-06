@@ -21,7 +21,7 @@ jobs:
         with:
           extra-packages: -e ".[dev,mcp,duckdb]"
 
-      - name: Run smoke test (catalog manifest GCS)
+      - name: Run smoke test (catalog inventory GCS)
         env:
           SMOKE_TESTS: "1"
         run: pytest tests/http/test_http_real.py -v --tb=short
@@ -36,7 +36,7 @@ jobs:
               repo: context.repo.repo,
               state: "open",
             });
-            const existing = issues.find(i => i.title.includes("GCS manifest smoke test failed"));
+            const existing = issues.find(i => i.title.includes("Catalog inventory smoke test failed"));
             if (existing) {
               console.log("Issue already open: #" + existing.number);
               return;
@@ -44,12 +44,12 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: "⚠️ GCS manifest smoke test failed",
-              body: `The weekly smoke test (GET registry/gcs_manifest.json) failed at ${new Date().toISOString()}.
+              title: "⚠️ Catalog inventory smoke test failed",
+              body: `The weekly smoke test (GET catalog_inventory/catalog_inventory_report.json) failed at ${new Date().toISOString()}.
 
             This likely means:
             - GCS bucket dataciviclab-clean is unreachable
-            - The gcs_manifest.json contract has changed
+            - The catalog_inventory_report.json contract has changed
             - There is a TLS or network issue
 
             Investigate and either fix the endpoint or update the test.
