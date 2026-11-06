@@ -162,7 +162,7 @@ def latest_published_year(
     table: str | None = None,
     probe: Probe | None = None,
     today_year: int | None = None,
-) -> int:
+) -> int | None:
     """Anno più recente con dati pubblicati.
 
     Ordine di risoluzione:
@@ -182,7 +182,8 @@ def latest_published_year(
         today_year: Anno corrente (iniettabile nei test).
 
     Returns:
-        Anno più recente disponibile.
+        Anno più recente disponibile, o ``None`` se non c'è nessuna
+        partizione pubblicata.
 
     Raises:
         ValueError: se ``layer="mart"`` senza ``table``.
@@ -225,7 +226,7 @@ def latest_published_year(
             )
         if check(uri):
             return year
-    return current
+    return None
 
 
 __all__ = ["Probe", "latest_published_year", "published_years", "year_range"]

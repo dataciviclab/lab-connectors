@@ -443,7 +443,7 @@ from lab_connectors.registry import (
 |---|---|
 | `year_range(registry, *, slug=None, local_root=None)` | Tutti gli anni del `period` (non solo start/end), con filtro opzionale sui file locali |
 | `published_years(registry, slug, *, probe=None)` | Anni con partizione presente su GCS (path puntuale senza rete; glob verificato con HEAD) |
-| `latest_published_year(registry, slug, *, prefix=None, probe=None)` | Anno più recente pubblicato, con fallback HEAD su `clean_parquet` |
+| `latest_published_year(registry, slug, *, prefix=None, probe=None)` | Anno più recente pubblicato (fallback HEAD su `clean_parquet`); `None` se non c'è nessuna partizione |
 | `to_url_slug(slug)` | Slug interno → slug URL pubblico Explorer (override editoriali inclusi) |
 
 `probe` è iniettabile (`gs_uri -> bool`): i test non toccano la rete.

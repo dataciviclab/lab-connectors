@@ -137,9 +137,9 @@ class TestLatestPublishedYear:
         # prefix dal registry assente: la funzione usa ""
         assert latest_published_year(reg, "demo", probe=probe, today_year=2026) == 2025
 
-    def test_nessuna_pubblicazione_torna_anno_corrente(self) -> None:
+    def test_nessuna_pubblicazione_ritorna_none(self) -> None:
         reg = _registry(demo={})
-        assert latest_published_year(reg, "demo", probe=_glob_probe(set()), today_year=2026) == 2026
+        assert latest_published_year(reg, "demo", probe=_glob_probe(set()), today_year=2026) is None
 
     def test_mart_senza_table_errore(self) -> None:
         reg = _registry(demo={})
