@@ -7,7 +7,6 @@ lab_connectors.registry invece di lab-dashboard.sources.load_catalog().
 from __future__ import annotations
 
 import logging
-import re
 import time
 from typing import Any
 
@@ -42,8 +41,9 @@ def render_sql_query(
         max_rows: Numero massimo di righe da restituire.
 
     """
-    import duckdb
     import streamlit as st
+
+    from lab_connectors.duckdb.core import safe_connect
 
     st.title(title)
     st.markdown(description)
@@ -192,7 +192,7 @@ def render_sql_query(
 
                 # Esegui
                 t0 = time.perf_counter()
-                with duckdb.connect() as con:
+                with safe_connect() as con:
                     df = con.sql(wrapped_sql).df()
                 elapsed = time.perf_counter() - t0
 
@@ -292,43 +292,17 @@ def _get_datasets_with_columns(registry: Any) -> list[dict[str, Any]]:
 def _urls_from_location(location_path: str) -> list[str]:
     """URL HTTPS dei parquet clean descritti da ``location.path``.
 
-    ``location.path`` è il contratto del layout scritto dal toolkit: può essere un
-    singolo file (``multi_file: false``) o un glob, come
-    ``gs://bucket/prefix/<slug>/*/<slug>_*_clean.parquet``.
-
-    Il glob va espanso **listando il bucket** (GCS JSON API, accesso anonimo ai
-    bucket pubblici): DuckDB non espande i glob su HTTPS
-    (``Globs (`*`) for generic HTTP file are not supported``).
-
-    Ritorna ``[]`` se il path non è ``gs://``, se il glob non produce match o se il
-    listing fallisce: il chiamante ricade sulla ricostruzione per anno.
+    Delega a ``lab_connectors.gcs.paths.location_urls`` (contratto unico
+    condiviso con Explorer e dashboard). Ritorna ``[]`` se il path non è
+    ``gs://``, se il glob non produce match o se il listing fallisce: il
+    chiamante ricade sulla ricostruzione per anno.
     """
-    from lab_connectors.gcs.client import list_objects
-    from lab_connectors.gcs.paths import glob_to_regex, parse_gs_url, public_url
+    from lab_connectors.gcs.paths import location_urls
 
     try:
-        bucket, key = parse_gs_url(location_path)
-    except ValueError:
-        return []
-
-    # singolo file: nessun glob da espandere
-    if "*" not in key:
-        return [public_url(location_path)]
-
-    # il listing si ferma al prefisso che precede il primo '*'
-    prefix = key[: key.index("*")]
-    prefix = prefix[: prefix.rfind("/") + 1]
-    try:
-        items = list_objects(bucket, prefix=prefix, auth=False)
+        return location_urls(location_path)
     except Exception:  # rete/permessi: meglio il fallback che un errore in pagina
         return []
-
-    pattern = re.compile(glob_to_regex(key))
-    return sorted(
-        public_url(f"gs://{bucket}/{item['name']}")
-        for item in items
-        if pattern.match(item.get("name", ""))
-    )
 
 
 def _cte_from_urls(urls: list[str]) -> str:
