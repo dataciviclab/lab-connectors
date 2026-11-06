@@ -16,6 +16,7 @@ _LAZY_SUBMODULES: dict[str, str] = {
     "fmt_eur": "lab_connectors.formatters",
     "fmt_num": "lab_connectors.formatters",
     "fmt_pct": "lab_connectors.formatters",
+    "fmt_usd": "lab_connectors.formatters",
     # lab_connectors.http
     "CircuitOpenError": "lab_connectors.http",
     "HttpClient": "lab_connectors.http",

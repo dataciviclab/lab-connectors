@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from lab_connectors.formatters import fmt_eur, fmt_num, fmt_pct
+from lab_connectors.formatters import fmt_eur, fmt_num, fmt_pct, fmt_usd
 
 pytestmark = pytest.mark.pure_unit
 
@@ -77,3 +77,26 @@ class TestFmtPct:
         result = fmt_pct(-5.0)
         assert "5.0%" in result
         assert "−" in result
+
+
+class TestFmtUsd:
+    def test_compact_mld(self) -> None:
+        assert fmt_usd(1_230_000_000) == "$ 1,23 mld"
+
+    def test_compact_mln(self) -> None:
+        assert fmt_usd(571_000_000) == "$ 571 mln"
+
+    def test_compact_k(self) -> None:
+        assert fmt_usd(7_500) == "$ 8 k"
+
+    def test_non_compact(self) -> None:
+        assert fmt_usd(1_234, compact=False) == "$ 1.234"
+
+    def test_none(self) -> None:
+        assert fmt_usd(None) == "—"
+
+    def test_zero(self) -> None:
+        assert fmt_usd(0) == "$ 0"
+
+    def test_negative(self) -> None:
+        assert fmt_usd(-1_500_000_000) == "$ -1,50 mld"

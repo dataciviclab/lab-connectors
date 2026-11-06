@@ -76,6 +76,24 @@ graphs = discover_graphs("https://semantic.istat.it/sparql")
 
 ---
 
+## `lab_connectors.formatters`
+
+Formattazione numerica italiana per dashboard Streamlit.
+
+```python
+from lab_connectors.formatters import fmt_eur, fmt_num, fmt_pct, fmt_usd
+
+fmt_eur(1_500_000)               # "€ 1.500.000"
+fmt_eur(2_500_000_000, compact=True)  # "€ 2,5 mld"
+fmt_num(8701)                    # "8.701"
+fmt_pct(0.1234, signed=True)     # "+12.3%"
+fmt_usd(1_230_000_000)           # "$ 1,23 mld"
+```
+
+Tutti gestiscono `None`/NaN → `"—"`.
+
+---
+
 ## `lab_connectors.mcp`
 
 Infrastruttura condivisa per i server MCP del Lab: init, error handling, logging, cache.
