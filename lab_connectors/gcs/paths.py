@@ -20,6 +20,7 @@ import json
 import re
 import threading
 from collections.abc import Mapping
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -259,12 +260,37 @@ def glob_to_regex(pattern: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=128)
+def _expand_glob_cached(uri: str) -> tuple[str, ...]:
+    """Esegui il listing del bucket per un glob (cache di processo).
+
+    Le dashboard e i build dei loader chiamano l'espansione più volte per lo
+    stesso dataset (una per anno): senza cache ogni chiamata sarebbe una
+    listing completa del prefix.
+    """
+    bucket, key = parse_gs_url(uri)
+
+    prefix = key[: key.index("*")]
+    prefix = prefix[: prefix.rfind("/") + 1]
+
+    from lab_connectors.gcs.client import list_objects
+
+    pattern = re.compile(glob_to_regex(key))
+    items = list_objects(bucket, prefix=prefix, auth=False)
+    return tuple(
+        sorted(
+            f"gs://{bucket}/{item['name']}" for item in items if pattern.match(item.get("name", ""))
+        )
+    )
+
+
 def expand_glob(uri: str) -> list[str]:
-    """Espande un glob ``gs://`` listando il bucket pubblico.
+    """Espande un glob ``gs://`` listando il bucket pubblico (con cache).
 
     DuckDB non espande i glob su HTTPS generico, quindi i consumer devono
     risolverli a monte. Il listing è limitato al prefisso che precede il primo
-    ``*`` e filtrato con ``glob_to_regex``.
+    ``*`` e filtrato con ``glob_to_regex``. Il risultato è cachato per processo
+    (``clear_glob_cache()`` per invalidare).
 
     Args:
         uri: URI ``gs://`` con almeno un ``*``.
@@ -279,18 +305,12 @@ def expand_glob(uri: str) -> list[str]:
     """
     if "*" not in uri:
         return [uri]
-    bucket, key = parse_gs_url(uri)
+    return list(_expand_glob_cached(uri))
 
-    prefix = key[: key.index("*")]
-    prefix = prefix[: prefix.rfind("/") + 1]
 
-    from lab_connectors.gcs.client import list_objects
-
-    pattern = re.compile(glob_to_regex(key))
-    items = list_objects(bucket, prefix=prefix, auth=False)
-    return sorted(
-        f"gs://{bucket}/{item['name']}" for item in items if pattern.match(item.get("name", ""))
-    )
+def clear_glob_cache() -> None:
+    """Svuota la cache di espansione glob (test o refresh esplicito)."""
+    _expand_glob_cached.cache_clear()
 
 
 def _location_path(location: Any) -> str:
@@ -370,6 +390,7 @@ __all__ = [
     "CLEAN_BUCKET",
     "MART_BUCKET",
     "catalog_manifest",
+    "clear_glob_cache",
     "expand_glob",
     "get_bucket",
     "glob_to_regex",

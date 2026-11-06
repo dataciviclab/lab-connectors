@@ -6,9 +6,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from lab_connectors.gcs.paths import expand_glob, location_urls
+from lab_connectors.gcs.paths import clear_glob_cache, expand_glob, location_urls
 
 pytestmark = pytest.mark.contract
+
+
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    clear_glob_cache()
+    yield
+    clear_glob_cache()
 
 
 class TestLocationUrls:
@@ -64,3 +71,32 @@ class TestExpandGlob:
         monkeypatch.setattr("lab_connectors.gcs.client.list_objects", boom)
         with pytest.raises(RuntimeError, match="rete"):
             expand_glob("gs://bucket/p/*/x.parquet")
+
+
+class TestGlobCache:
+    def test_espansione_ripetuta_lista_una_volta(self, monkeypatch) -> None:
+        calls: list[str] = []
+
+        def fake_list_objects(bucket: str, prefix: str = "", **_kwargs: object) -> list[dict]:
+            calls.append(prefix)
+            return [{"name": "p/s/2024/s_2024_clean.parquet"}]
+
+        monkeypatch.setattr("lab_connectors.gcs.client.list_objects", fake_list_objects)
+        uri = "gs://bucket/p/s/*/s_*_clean.parquet"
+
+        assert expand_glob(uri) == expand_glob(uri)
+        assert len(calls) == 1
+
+    def test_clear_invalida(self, monkeypatch) -> None:
+        calls: list[str] = []
+
+        def fake_list_objects(bucket: str, prefix: str = "", **_kwargs: object) -> list[dict]:
+            calls.append(prefix)
+            return []
+
+        monkeypatch.setattr("lab_connectors.gcs.client.list_objects", fake_list_objects)
+        uri = "gs://bucket/p/s/*/s_*_clean.parquet"
+        expand_glob(uri)
+        clear_glob_cache()
+        expand_glob(uri)
+        assert len(calls) == 2
