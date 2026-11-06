@@ -54,6 +54,38 @@ def fmt_num(value: float | int | None) -> str:
     return f"{int(value):,}".replace(",", ".")
 
 
+def fmt_usd(value: float | int | None, *, compact: bool = True) -> str:
+    """Formatta un valore in dollari (dataset internazionali, es. Comtrade).
+
+    Args:
+        value: Valore in USD.
+        compact: Se ``True`` (default), abbrevia a ``k`` / ``mln`` / ``mld``.
+
+    Examples:
+        >>> fmt_usd(1_230_000_000)
+        '$ 1,23 mld'
+        >>> fmt_usd(571_000_000)
+        '$ 571 mln'
+        >>> fmt_usd(1234, compact=False)
+        '$ 1.234'
+
+    """
+    value = _safe_number(value)
+    if value is None:
+        return "—"
+    v = float(value)
+    if compact:
+        if abs(v) >= 1e9:
+            return (
+                f"$ {v / 1e9:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " mld"
+            )
+        if abs(v) >= 1e6:
+            return f"$ {v / 1e6:,.0f}".replace(",", ".") + " mln"
+        if abs(v) >= 1e3:
+            return f"$ {v / 1e3:,.0f}".replace(",", ".") + " k"
+    return f"$ {v:,.0f}".replace(",", ".")
+
+
 def fmt_pct(value: float | None, *, decimals: int = 1, signed: bool = False) -> str:
     """Formatta una percentuale.
 
@@ -83,4 +115,4 @@ def fmt_pct(value: float | None, *, decimals: int = 1, signed: bool = False) -> 
     return f"{sign}{v:.{decimals}f}%".replace("-", "−")
 
 
-__all__ = ["fmt_eur", "fmt_num", "fmt_pct"]
+__all__ = ["fmt_eur", "fmt_num", "fmt_pct", "fmt_usd"]
