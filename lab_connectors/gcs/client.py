@@ -10,7 +10,6 @@ Le funzioni module-level usano un client singleton lazy.
 
 from __future__ import annotations
 
-import json
 import threading
 from pathlib import Path
 from typing import Any
@@ -56,6 +55,31 @@ def _get_storage_client(project: str = "dataciviclab") -> Any | None:
 # ---------------------------------------------------------------------------
 
 
+def _http_get_json(url: str, *, timeout: int = 30) -> dict[str, Any]:
+    """GET JSON via ``HttpClient`` (retry, SSL fallback, UA uniforme)."""
+    from lab_connectors.http import HttpClient
+
+    result = HttpClient(timeout=timeout, max_retries=2).get(url)
+    resp = result.response
+    if resp is None or resp.status_code >= 400:
+        status = resp.status_code if resp is not None else "no response"
+        raise RuntimeError(f"GCS HTTP error {status} per {url} ({result.err})")
+    payload = resp.json()
+    if not isinstance(payload, dict):
+        raise TypeError(f"Risposta GCS non valida (non oggetto JSON): {url}")
+    return payload
+
+
+def _http_head(url: str, *, timeout: int = 30) -> int | None:
+    """HEAD via ``HttpClient``. Status code o ``None`` su errore."""
+    from lab_connectors.http import HttpClient
+
+    result = HttpClient(timeout=timeout, max_retries=1).head(url)
+    if result.response is None:
+        return None
+    return result.response.status_code
+
+
 def _gcs_http_list(
     bucket: str,
     prefix: str = "",
@@ -64,7 +88,6 @@ def _gcs_http_list(
 ) -> tuple[list[dict[str, Any]], str | None]:
     """List objects via HTTP API. Returns (items, next_page_token)."""
     from urllib.parse import quote, urlencode
-    from urllib.request import urlopen
 
     params: dict[str, str | int] = {
         "prefix": prefix,
@@ -76,8 +99,7 @@ def _gcs_http_list(
         params["pageToken"] = page_token
 
     url = f"https://storage.googleapis.com/storage/v1/b/{quote(bucket)}/o?{urlencode(params)}"
-    with urlopen(url, timeout=30) as resp:
-        payload = json.loads(resp.read().decode("utf-8"))
+    payload = _http_get_json(url)
 
     items = payload.get("items", [])
     next_token = payload.get("nextPageToken")
@@ -87,13 +109,10 @@ def _gcs_http_list(
 def _gcs_http_head(bucket: str, key: str) -> int | None:
     """HEAD request a un oggetto GCS. Ritorna status code o None su errore."""
     from urllib.parse import quote
-    from urllib.request import Request, urlopen
 
     url = f"https://storage.googleapis.com/{quote(bucket, safe='')}/{quote(key, safe='/_-.')}"
     try:
-        req = Request(url, method="HEAD")
-        with urlopen(req, timeout=30) as resp:
-            return resp.status
+        return _http_head(url)
     except Exception:
         return None
 
@@ -235,38 +254,27 @@ def object_exists(bucket: str, key: str) -> bool:
 def check_public(url: str) -> dict[str, Any]:
     """Verifica se un URL pubblico GCS è raggiungibile.
 
-    Tenta HEAD; se fallisce (405/501), tenta GET con Range: bytes=0-0.
+    Delega a ``lab_connectors.http.probe.probe_url_headers`` (HEAD + fallback
+    GET Range), così la logica di probe resta una sola nel Lab.
 
     Returns:
         dict con chiavi: accessible (bool), status_code (int|None),
         content_type (str|None)
 
     """
-    from urllib.request import Request, urlopen
+    from lab_connectors.http.probe import probe_url_headers
 
     try:
-        req = Request(url, method="HEAD")
-        with urlopen(req, timeout=30) as resp:
-            return {
-                "accessible": resp.status < 400,
-                "status_code": resp.status,
-                "content_type": resp.headers.get("Content-Type"),
-            }
-    except Exception:
-        pass
-
-    # Fallback: GET con Range
-    try:
-        req = Request(url, method="GET")
-        req.add_header("Range", "bytes=0-0")
-        with urlopen(req, timeout=30) as resp:
-            return {
-                "accessible": resp.status in (200, 206),
-                "status_code": resp.status,
-                "content_type": resp.headers.get("Content-Type"),
-            }
-    except Exception:
+        info = probe_url_headers(url, timeout=30)
+    except RuntimeError:
         return {"accessible": False, "status_code": None, "content_type": None}
+
+    status = info.get("status_code")
+    return {
+        "accessible": status is not None and int(status) < 400,
+        "status_code": status,
+        "content_type": info.get("content_type"),
+    }
 
 
 def upload_file(local_path: str | Path, bucket: str, gcs_path: str) -> None:

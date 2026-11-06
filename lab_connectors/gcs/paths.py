@@ -17,7 +17,9 @@ Usage::
 from __future__ import annotations
 
 import json
+import re
 import threading
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -253,6 +255,87 @@ def glob_to_regex(pattern: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Location del registry → URL leggibili
+# ---------------------------------------------------------------------------
+
+
+def expand_glob(uri: str) -> list[str]:
+    """Espande un glob ``gs://`` listando il bucket pubblico.
+
+    DuckDB non espande i glob su HTTPS generico, quindi i consumer devono
+    risolverli a monte. Il listing è limitato al prefisso che precede il primo
+    ``*`` e filtrato con ``glob_to_regex``.
+
+    Args:
+        uri: URI ``gs://`` con almeno un ``*``.
+
+    Returns:
+        URI ``gs://`` ordinati che matchano il glob, o ``[]`` se nessuno.
+
+    Raises:
+        ValueError: se l'URI non è ``gs://``.
+        RuntimeError: se il listing del bucket fallisce.
+
+    """
+    if "*" not in uri:
+        return [uri]
+    bucket, key = parse_gs_url(uri)
+
+    prefix = key[: key.index("*")]
+    prefix = prefix[: prefix.rfind("/") + 1]
+
+    from lab_connectors.gcs.client import list_objects
+
+    pattern = re.compile(glob_to_regex(key))
+    items = list_objects(bucket, prefix=prefix, auth=False)
+    return sorted(
+        f"gs://{bucket}/{item['name']}" for item in items if pattern.match(item.get("name", ""))
+    )
+
+
+def _location_path(location: Any) -> str:
+    """Path da un dict location del registry, da un oggetto o da una stringa."""
+    if isinstance(location, str):
+        return location
+    if isinstance(location, Mapping):
+        return str(location.get("path") or "")
+    return str(getattr(location, "path", "") or "")
+
+
+def location_urls(location: Any, years: list[int] | None = None) -> list[str]:
+    """URL HTTPS dei parquet descritti da una ``location`` del registry.
+
+    Contratto unico per "``location.path`` → file leggibili da DuckDB",
+    usato da dashboard, Explorer e pagina SQL.
+
+    Args:
+        location: Voce ``location`` del registry (dict o dataclass ``Location``)
+            oppure direttamente il path ``gs://``.
+        years: Anni per cui espandere un path multi-file (``*`` sostituito
+            con l'anno). Se assente, un glob viene espanso listando il bucket.
+
+    Returns:
+        URL HTTPS ordinati; ``[]`` se il path non è ``gs://`` o non c'è match.
+
+    Raises:
+        RuntimeError: se l'espansione del glob fallisce (rete/permessi). Il
+            chiamante può ricadere sulla ricostruzione per anno.
+
+    """
+    path = _location_path(location)
+    if not path.startswith("gs://"):
+        return []
+
+    if "*" not in path:
+        return [public_url(path)]
+
+    if years:
+        return [public_url(path.replace("*", str(year))) for year in years]
+
+    return [public_url(uri) for uri in expand_glob(path)]
+
+
+# ---------------------------------------------------------------------------
 # Convenience functions usate dai consumer
 # ---------------------------------------------------------------------------
 
@@ -287,11 +370,13 @@ __all__ = [
     "CLEAN_BUCKET",
     "MART_BUCKET",
     "catalog_manifest",
+    "expand_glob",
     "get_bucket",
     "glob_to_regex",
     "gs_url",
     "https_url",
     "load_contract",
+    "location_urls",
     "mart_parquet",
     "parse_gs_url",
     "pipeline_run",

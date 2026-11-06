@@ -52,13 +52,10 @@ class GcsListObjectsTest(unittest.TestCase):
         results = list_objects("dataciviclab-clean", prefix="__nonexistent__", limit=5, auth=False)
         self.assertEqual(results, [])
 
-    @patch("urllib.request.urlopen")
-    def test_list_http_parse(self, mock_urlopen) -> None:
+    @patch("lab_connectors.gcs.client._http_get_json")
+    def test_list_http_parse(self, mock_get_json) -> None:
         """Parsing corretto della risposta HTTP API."""
-        import json
-        from io import BytesIO
-
-        data = {
+        mock_get_json.return_value = {
             "items": [
                 {
                     "name": "test/file.parquet",
@@ -67,9 +64,6 @@ class GcsListObjectsTest(unittest.TestCase):
                 },
             ]
         }
-        mock_response = BytesIO(json.dumps(data).encode())
-        mock_response.status = 200
-        mock_urlopen.return_value = mock_response
 
         results = list_objects("test-bucket", prefix="test/", auth=False)
         self.assertEqual(len(results), 1)
@@ -80,46 +74,33 @@ class GcsListObjectsTest(unittest.TestCase):
 class GcsObjectExistsTest(unittest.TestCase):
     """object_exists via HEAD pubblico."""
 
-    @patch("urllib.request.urlopen")
-    def test_exists_returns_true(self, mock_urlopen) -> None:
-        from io import BytesIO
-
-        mock = BytesIO(b"")
-        mock.status = 200
-        mock_urlopen.return_value = mock
-
+    @patch("lab_connectors.gcs.client._http_head", return_value=200)
+    def test_exists_returns_true(self, _mock_head) -> None:
         self.assertTrue(object_exists("test-bucket", "existing/file.parquet"))
 
-    @patch("urllib.request.urlopen")
-    def test_not_found_returns_false(self, mock_urlopen) -> None:
-        from urllib.error import HTTPError
-
-        mock_urlopen.side_effect = HTTPError("http://example.com", 404, "Not Found", {}, None)
-
+    @patch("lab_connectors.gcs.client._http_head", return_value=None)
+    def test_not_found_returns_false(self, _mock_head) -> None:
         self.assertFalse(object_exists("test-bucket", "missing/file.parquet"))
 
 
 class GcsCheckPublicTest(unittest.TestCase):
-    """check_public su URL pubblico."""
+    """check_public su URL pubblico (delega a http.probe)."""
 
-    @patch("urllib.request.urlopen")
-    def test_accessible(self, mock_urlopen) -> None:
-        from io import BytesIO
-
-        mock = BytesIO(b"")
-        mock.status = 200
-        mock.headers = {"Content-Type": "application/x-parquet"}
-        mock_urlopen.return_value = mock
+    @patch("lab_connectors.http.probe.probe_url_headers")
+    def test_accessible(self, mock_probe) -> None:
+        mock_probe.return_value = {
+            "status_code": 200,
+            "content_type": "application/x-parquet",
+            "method": "HEAD",
+        }
 
         result = check_public("https://storage.googleapis.com/test/file.parquet")
         self.assertTrue(result["accessible"])
         self.assertEqual(result["status_code"], 200)
 
-    @patch("urllib.request.urlopen")
-    def test_not_found(self, mock_urlopen) -> None:
-        from urllib.error import HTTPError
-
-        mock_urlopen.side_effect = HTTPError("http://example.com", 404, "Not Found", {}, None)
+    @patch("lab_connectors.http.probe.probe_url_headers")
+    def test_not_found(self, mock_probe) -> None:
+        mock_probe.return_value = {"status_code": 404, "content_type": None, "method": "HEAD"}
 
         result = check_public("https://storage.googleapis.com/test/missing.parquet")
         self.assertFalse(result["accessible"])
@@ -216,23 +197,13 @@ class GcsHttpPaginationTest(unittest.TestCase):
     """Test per la paginazione HTTP fallback (auth=None senza SDK)."""
 
     @patch("lab_connectors.gcs.client._get_storage_client")
-    @patch("urllib.request.urlopen")
-    def test_auth_none_fallback_no_pagination(self, mock_urlopen, mock_get_client):
+    @patch("lab_connectors.gcs.client._http_get_json")
+    def test_auth_none_fallback_no_pagination(self, mock_get_json, mock_get_client):
         """auth=None senza SDK → fallback HTTP, pagina singola."""
-        import json
-        from io import BytesIO
-
         mock_get_client.return_value = None
-
-        def fake_open(url, **kw):
-            data = {
-                "items": [{"name": "a.parquet", "size": "100", "updated": "2026-01-01T00:00:00Z"}]
-            }
-            result = BytesIO(json.dumps(data).encode())
-            result.status = 200
-            return result
-
-        mock_urlopen.side_effect = fake_open
+        mock_get_json.return_value = {
+            "items": [{"name": "a.parquet", "size": "100", "updated": "2026-01-01T00:00:00Z"}]
+        }
 
         results = list_objects("test-bucket", prefix="", auth=None)
         self.assertEqual(len(results), 1)
@@ -240,36 +211,18 @@ class GcsHttpPaginationTest(unittest.TestCase):
         self.assertEqual(results[0]["size"], 100)
 
     @patch("lab_connectors.gcs.client._get_storage_client")
-    @patch("urllib.request.urlopen")
-    def test_auth_none_fallback_with_pagination(self, mock_urlopen, mock_get_client):
+    @patch("lab_connectors.gcs.client._http_get_json")
+    def test_auth_none_fallback_with_pagination(self, mock_get_json, mock_get_client):
         """auth=None senza SDK → paginazione HTTP, 2 pagine."""
-        import json
-        from io import BytesIO
-
         mock_get_client.return_value = None
-
-        page = 0
-
-        def fake_open(url, **kw):
-            nonlocal page
-            page += 1
-            items = [
-                {"name": f"p1_{i}.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
-                for i in range(3)
-            ]
-            if page == 1:
-                data = {"items": items, "nextPageToken": "token-p2"}
-            else:
-                data = {
-                    "items": [
-                        {"name": "p2_0.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
-                    ]
-                }
-            result = BytesIO(json.dumps(data).encode())
-            result.status = 200
-            return result
-
-        mock_urlopen.side_effect = fake_open
+        page1 = [
+            {"name": f"p1_{i}.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
+            for i in range(3)
+        ]
+        mock_get_json.side_effect = [
+            {"items": page1, "nextPageToken": "token-p2"},
+            {"items": [{"name": "p2_0.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}]},
+        ]
 
         results = list_objects("test-bucket", prefix="", auth=None)
         self.assertEqual(len(results), 4)
@@ -277,29 +230,17 @@ class GcsHttpPaginationTest(unittest.TestCase):
         self.assertIn("p2_0.parquet", [r["name"] for r in results])
 
     @patch("lab_connectors.gcs.client._get_storage_client")
-    @patch("urllib.request.urlopen")
-    def test_auth_none_fallback_with_limit(self, mock_urlopen, mock_get_client):
+    @patch("lab_connectors.gcs.client._http_get_json")
+    def test_auth_none_fallback_with_limit(self, mock_get_json, mock_get_client):
         """auth=None con limit → paginazione interrotta al raggiungimento del limite."""
-        import json
-        from io import BytesIO
-
         mock_get_client.return_value = None
-
-        page = 0
-
-        def fake_open(url, **kw):
-            nonlocal page
-            page += 1
-            items = [
+        mock_get_json.return_value = {
+            "items": [
                 {"name": f"p1_{i}.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
                 for i in range(3)
-            ]
-            data = {"items": items, "nextPageToken": "token-p2"}
-            result = BytesIO(json.dumps(data).encode())
-            result.status = 200
-            return result
-
-        mock_urlopen.side_effect = fake_open
+            ],
+            "nextPageToken": "token-p2",
+        }
 
         # limit=1 → solo 1 risultato, nonostante ci siano 3 nella prima pagina
         results = list_objects("test-bucket", prefix="", limit=1, auth=None)
@@ -308,83 +249,46 @@ class GcsHttpPaginationTest(unittest.TestCase):
 
 
 class GcsHttpAuthFalsePaginationTest(unittest.TestCase):
-    """Test per la paginazione HTTP con auth=False (ramo modificato dalla PR).
+    """Test per la paginazione HTTP con auth=False."""
 
-    Questi test coprono il ramo ``auth=False`` che la PR ha fixato aggiungendo
-    la paginazione completa. Il ramo ``auth=None`` fallback ha test separati
-    in ``GcsHttpPaginationTest``.
-    """
-
-    @patch("urllib.request.urlopen")
-    def test_auth_false_no_pagination(self, mock_urlopen):
+    @patch("lab_connectors.gcs.client._http_get_json")
+    def test_auth_false_no_pagination(self, mock_get_json):
         """auth=False, pagina singola."""
-        import json
-        from io import BytesIO
-
-        def fake_open(url, **kw):
-            data = {
-                "items": [{"name": "a.parquet", "size": "100", "updated": "2026-01-01T00:00:00Z"}]
-            }
-            result = BytesIO(json.dumps(data).encode())
-            result.status = 200
-            return result
-
-        mock_urlopen.side_effect = fake_open
+        mock_get_json.return_value = {
+            "items": [{"name": "a.parquet", "size": "100", "updated": "2026-01-01T00:00:00Z"}]
+        }
 
         results = list_objects("test-bucket", prefix="", auth=False)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["name"], "a.parquet")
 
-    @patch("urllib.request.urlopen")
-    def test_auth_false_with_pagination(self, mock_urlopen):
+    @patch("lab_connectors.gcs.client._http_get_json")
+    def test_auth_false_with_pagination(self, mock_get_json):
         """auth=False con paginazione: 2 pagine."""
-        import json
-        from io import BytesIO
-
-        page_count = [0]  # mutable per closure
-
-        def fake_open(url, **kw):
-            page_count[0] += 1
-            if page_count[0] == 1:
-                items = [
-                    {"name": f"p1_{i}.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
-                    for i in range(3)
-                ]
-                data = {"items": items, "nextPageToken": "token-p2"}
-            else:
-                data = {
-                    "items": [
-                        {"name": "p2_0.parquet", "size": "20", "updated": "2026-01-01T00:00:00Z"}
-                    ]
-                }
-            result = BytesIO(json.dumps(data).encode())
-            result.status = 200
-            return result
-
-        mock_urlopen.side_effect = fake_open
+        page1 = [
+            {"name": f"p1_{i}.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
+            for i in range(3)
+        ]
+        mock_get_json.side_effect = [
+            {"items": page1, "nextPageToken": "token-p2"},
+            {"items": [{"name": "p2_0.parquet", "size": "20", "updated": "2026-01-01T00:00:00Z"}]},
+        ]
 
         results = list_objects("test-bucket", prefix="", auth=False)
         self.assertEqual(len(results), 4, "dovrebbe unire 3 + 1 = 4 oggetti da 2 pagine")
         self.assertIn("p1_0.parquet", [r["name"] for r in results])
         self.assertIn("p2_0.parquet", [r["name"] for r in results])
 
-    @patch("urllib.request.urlopen")
-    def test_auth_false_with_limit(self, mock_urlopen):
+    @patch("lab_connectors.gcs.client._http_get_json")
+    def test_auth_false_with_limit(self, mock_get_json):
         """auth=False con limit: paginazione interrotta al raggiungimento del limite."""
-        import json
-        from io import BytesIO
-
-        def fake_open(url, **kw):
-            items = [
+        mock_get_json.return_value = {
+            "items": [
                 {"name": f"p1_{i}.parquet", "size": "10", "updated": "2026-01-01T00:00:00Z"}
                 for i in range(3)
-            ]
-            data = {"items": items, "nextPageToken": "token-p2"}
-            result = BytesIO(json.dumps(data).encode())
-            result.status = 200
-            return result
-
-        mock_urlopen.side_effect = fake_open
+            ],
+            "nextPageToken": "token-p2",
+        }
 
         results = list_objects("test-bucket", prefix="", limit=1, auth=False)
         self.assertEqual(len(results), 1, "limit=1 deve fermarsi dopo 1 oggetto")

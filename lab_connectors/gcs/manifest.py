@@ -3,8 +3,12 @@
 Generato periodicamente da scripts/scan_gcs_manifest.py e pubblicato su
 gs://dataciviclab-clean/registry/gcs_manifest.json.
 
-Qualsiasi repo del Lab può leggere il manifest per avere la lista completa
-dei file senza chiamate GCS live.
+.. deprecated::
+    In dismissione: è stato sostituito dai ``registry.json`` dei repo per la
+    risoluzione degli artifact e, per l'esistenza dei file, da
+    ``gcs.paths.location_urls()`` / ``gcs.client.object_exists``.
+    L'unico consumer (``data-explorer``) migrerà a ``location_urls``; non
+    usare il manifest in nuovi consumer.
 """
 
 from __future__ import annotations
@@ -90,18 +94,38 @@ def read_manifest(url: str | None = None) -> dict[str, Any]:
         TimeoutError: se la richiesta scade.
 
     """
-    from urllib.error import HTTPError
-    from urllib.request import urlopen
-
     fetch_url = url or MANIFEST_URL
+    status, text = _fetch(fetch_url)
+
+    if status in (404, 403):
+        raise FileNotFoundError(f"Manifest non trovato a {fetch_url} (HTTP {status})")
+    if status >= 400:
+        raise RuntimeError(f"Errore HTTP {status} per manifest a {fetch_url}")
+
     try:
-        with urlopen(fetch_url, timeout=15) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except HTTPError as e:
-        if e.code in (404, 403):
-            raise FileNotFoundError(f"Manifest non trovato a {fetch_url} (HTTP {e.code})") from e
-        raise RuntimeError(f"Errore HTTP {e.code} per manifest a {fetch_url}") from e
+        return json.loads(text)
     except json.JSONDecodeError as e:
         raise ValueError(f"Manifest corrotto a {fetch_url}: {e}") from e
-    except TimeoutError as e:
-        raise TimeoutError(f"Timeout lettura manifest da {fetch_url}") from e
+
+
+def _fetch(url: str, *, timeout: int = 15) -> tuple[int, str]:
+    """GET del manifest via ``HttpClient`` (retry, SSL fallback).
+
+    Returns:
+        (status_code, body).
+
+    Raises:
+        TimeoutError: se la richiesta scade.
+        RuntimeError: se non c'è risposta per altri motivi.
+
+    """
+    from lab_connectors.http import HttpClient
+
+    result = HttpClient(timeout=timeout, max_retries=2).get(url)
+    resp = result.response
+    if resp is None:
+        err = result.err
+        if isinstance(err, TimeoutError) or "timeout" in str(err).lower():
+            raise TimeoutError(f"Timeout lettura manifest da {url}")
+        raise RuntimeError(f"Manifest non raggiungibile a {url}: {err}")
+    return resp.status_code, resp.text

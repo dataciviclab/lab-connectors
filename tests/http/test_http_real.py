@@ -1,8 +1,14 @@
 """Smoke test: HttpClient contro un endpoint reale del Lab.
 
-Questo test fa una chiamata HTTP GET reale al manifest del catalogo
-su GCS pubblico per verificare che ``HttpClient`` funzioni end-to-end
-con la rete reale — DNS, TLS, response parsing, timeout.
+Questo test fa una chiamata HTTP GET reale a un artifact pubblico del Lab
+(``catalog_inventory/catalog_inventory_report.json``, prodotto da SO) per
+verificare che ``HttpClient`` funzioni end-to-end con la rete reale —
+DNS, TLS, response parsing, timeout.
+
+Nota: il target è volutamente un artifact **vivo e piccolo**. Il
+``gcs_manifest.json`` è in dismissione (sostituito dai ``registry.json`` dei
+repo) e ``catalog/manifest.json`` è fermo dal 2026-08-05: nessuno dei due è
+un buon candidato per uno smoke test.
 
 Il test è **skippato di default** (usa ``SMOKE_TESTS=1`` per abilitarlo)
 ed è pensato per essere eseguito su schedule (settimanale) o on-demand.
@@ -21,24 +27,28 @@ import pytest
 from lab_connectors.http import HttpClient
 from lab_connectors.http.types import HttpResult
 
-MANIFEST_URL = "https://storage.googleapis.com/dataciviclab-clean/catalog/manifest.json"
+SMOKE_URL = (
+    "https://storage.googleapis.com/dataciviclab-clean/"
+    "catalog_inventory/catalog_inventory_report.json"
+)
 
 
 @pytest.mark.smoke
-def test_get_catalog_manifest() -> None:
-    """GET catalog/manifest.json → 200 + JSON con 'items' e 'generated_at'."""
+def test_get_catalog_inventory_report() -> None:
+    """GET catalog_inventory_report.json → 200 + JSON con 'sources'."""
     _require_smoke_env()
 
-    client = HttpClient(timeout=15, max_retries=1)
-    result = client.get(MANIFEST_URL)
+    client = HttpClient(timeout=20, max_retries=1)
+    result = client.get(SMOKE_URL)
 
     _assert_result_ok(result)
     assert result.response is not None
     data = result.response.json()
     assert isinstance(data, dict)
-    assert "items" in data, "manifest.json deve contenere 'items'"
-    assert "generated_at" in data, "manifest.json deve contenere 'generated_at'"
-    assert isinstance(data["items"], list)
+    assert "sources" in data, "il report deve contenere 'sources'"
+    assert isinstance(data["sources"], dict)
+    assert data["sources"], "il report non deve essere vuoto"
+    assert isinstance(data.get("captured_at"), str)
 
 
 # ------------------------------------------------------------------

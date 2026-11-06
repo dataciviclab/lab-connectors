@@ -74,15 +74,25 @@ mcp = create_mcp_server(
 Client GCS unificato con 3 modalità (SDK, HTTP API, auto-fallback) e **path
 contract canonici** — i path di tutti gli artifact del Lab su GCS, risolvibili
 con `resolve()`, `gs_url()`, `https_url()`. Include upload/verifica
-(`upload_file`, `upload_string`, `object_exists`) e il manifest GCS
-(`read_manifest`), indice centralizzato dei file sui bucket pubblici.
+(`upload_file`, `upload_string`, `object_exists`).
+
+> **Manifest in dismissione.** `read_manifest()` / `gcs_manifest.json` sono
+> sostituiti dai `registry.json` dei repo e da `location_urls()`; restano solo
+> per il consumer storico (`data-explorer`) e non vanno usati in nuovi consumer.
 
 ```python
-from lab_connectors.gcs.paths import resolve
+from lab_connectors.gcs.paths import resolve, location_urls
 
 path = resolve("clean_parquet", slug="ispra_ru_base", year=2024)
 # → "ispra_ru_base/2024/ispra_ru_base_2024_clean.parquet"
+
+# location.path del registry → URL leggibili da DuckDB
+urls = location_urls({"path": "gs://dataciviclab-clean/p/s/2024/s_2024_clean.parquet"})
 ```
+
+`location_urls()` è il contratto unico per "location del registry → file
+leggibili": gestisce path puntuali, glob multi-anno (`*` sostituito con
+l'anno) e espansione del glob via listing (`expand_glob`).
 
 ## DuckDB
 
@@ -114,6 +124,11 @@ df = query_clean(
 )
 ```
 
+Le funzioni accettano `source="auto"|"local"|"gcs"` e, per il caso
+"`out/data` parziale", `fallback_remote=True` (riprova una volta su GCS quando
+il file locale manca). Con `registry=` il prefix GCS viene derivato da
+`location.path`, senza hardcodarlo nella dashboard.
+
 ## Registry
 
 Modelli e client per `registry/registry.json` — il catalogo degli artifact di ogni repo.
@@ -133,6 +148,20 @@ for sig in reg.signals:
 ```
 
 `registry_to_dict()` converte le dataclass in dict per backward compat.
+
+Utility condivise per i consumer:
+
+```python
+from lab_connectors.registry import (
+    latest_published_year,   # ultimo anno con partizione pubblicata
+    to_url_slug,             # slug interno → slug URL pubblico (Explorer)
+    year_range,              # tutti gli anni del period (non solo start/end)
+)
+
+to_url_slug("istat_housing_crowding")          # "housing-crowding"
+latest_published_year(reg, "ispra_ru_base")    # 2024
+year_range(reg, slug="ispra_ru_base")          # [2019, ..., 2024]
+```
 
 ## Testing
 

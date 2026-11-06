@@ -10,6 +10,11 @@ Usage::
         print(sig.id, sig.status)
 """
 
+from lab_connectors.registry.availability import (
+    latest_published_year,
+    published_years,
+    year_range,
+)
 from lab_connectors.registry.client import (
     load_registry,
     load_registry_github,
@@ -26,8 +31,10 @@ from lab_connectors.registry.models import (
     Run,
     Signal,
 )
+from lab_connectors.registry.slugs import URL_SLUG_OVERRIDES, to_url_slug
 
 __all__ = [
+    "URL_SLUG_OVERRIDES",
     "Column",
     "Dataset",
     "Location",
@@ -35,9 +42,13 @@ __all__ = [
     "Registry",
     "Run",
     "Signal",
+    "latest_published_year",
     "load_registry",
     "load_registry_github",
     "load_registry_local",
     "load_registry_url",
+    "published_years",
     "registry_to_dict",
+    "to_url_slug",
+    "year_range",
 ]
