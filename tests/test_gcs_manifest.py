@@ -109,3 +109,11 @@ class TestReadManifest:
         with patch("lab_connectors.gcs.manifest._fetch", side_effect=TimeoutError("timed out")):
             with pytest.raises(TimeoutError):
                 read_manifest("https://example.com/timeout")
+
+
+@pytest.mark.contract
+def test_read_manifest_deprecato():
+    """Il manifest è in dismissione: read_manifest emette DeprecationWarning."""
+    with patch("lab_connectors.gcs.manifest._fetch", return_value=(200, '{"files": []}')):
+        with pytest.warns(DeprecationWarning, match="gcs_manifest"):
+            read_manifest("https://example.com/manifest.json")
