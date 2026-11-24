@@ -117,10 +117,11 @@ def published_years(
 ) -> list[int]:
     """Anni con una partizione presente su GCS per il dataset.
 
-    Con ``location.path`` puntuale (``multi_file: false``) l'anno è ricavato dal
-    path senza rete. Con un glob l'anno viene sostituito nel template e
-    verificato con ``probe``; i candidati sono quelli del ``period`` del
-    registry (se assente si usano gli ultimi 10 anni).
+    v2: se il registry dichiara ``partitions`` la lista è già nel file e non
+    serve rete. v1: con ``location.path`` puntuale (``multi_file: false``)
+    l'anno è ricavato dal path senza rete; con un glob l'anno viene sostituito
+    nel template e verificato con ``probe``; i candidati sono quelli del
+    ``period`` del registry (se assente si usano gli ultimi 10 anni).
 
     Args:
         registry: Registry del repo produttore.
@@ -135,6 +136,9 @@ def published_years(
     ds = _find_dataset(registry, slug)
     if ds is None:
         return []
+
+    if ds.partitions:
+        return ds.years
 
     path = (ds.location.path or "") if ds.location else ""
     if not path.startswith("gs://"):
@@ -167,10 +171,11 @@ def latest_published_year(
 
     Ordine di risoluzione:
 
-    1. anno/i da ``location.path`` (``published_years``);
-    2. probe HEAD sulle partizioni ``{prefix}{slug}/{year}/...`` per l'anno
+    1. ``partitions`` del registry v2 (nessuna rete);
+    2. anno/i da ``location.path`` (``published_years``);
+    3. probe HEAD sulle partizioni ``{prefix}{slug}/{year}/...`` per l'anno
        corrente e i due precedenti;
-    3. anno corrente.
+    4. anno corrente.
 
     Args:
         registry: Registry del repo produttore.
