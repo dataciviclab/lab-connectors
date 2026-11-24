@@ -22,6 +22,7 @@ from lab_connectors.registry.client import (
     load_registry_url,
     registry_to_dict,
 )
+from lab_connectors.registry.locations import clean_location, mart_location
 from lab_connectors.registry.models import (
     Column,
     Dataset,
@@ -42,11 +43,13 @@ __all__ = [
     "Registry",
     "Run",
     "Signal",
+    "clean_location",
     "latest_published_year",
     "load_registry",
     "load_registry_github",
     "load_registry_local",
     "load_registry_url",
+    "mart_location",
     "published_years",
     "registry_to_dict",
     "to_url_slug",

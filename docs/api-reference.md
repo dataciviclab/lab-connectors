@@ -414,7 +414,13 @@ df = load_mart_table("senato_corpus", "mart_atti", 2026, source="gcs")
 
 ## `lab_connectors.registry`
 
-Modelli e client per `registry/registry.json`.
+Modelli e client per `registry/registry.json` (**v1 e v2**).
+
+`Registry.from_dict` è l'unico punto di compatibilità: legge `schema_version: 1`
+(location scritte voce per voce, sezione `signals`) e `schema_version: 2`
+(contratto `gcs` + `partitions` + `last_run`, senza `signals`/`entities`) ed
+espone la stessa superficie dataclass. Per v2 le `location` sono sintetizzate
+da `lab_connectors.registry.locations` (clean e mart, layout flat/year/glob).
 
 ### Modelli
 
@@ -428,9 +434,9 @@ Ogni dataclass ha `from_dict(d)` per parsing sicuro da dict JSON.
 
 | Dataclass | Campi chiave |
 |-----------|-------------|
-| `Registry` | repo, source_repo, updated_at, datasets, marts, signals, entities |
-| `Dataset` | slug, name, description, period, columns, location, stage |
-| `Mart` | slug, dataset, table, location, primary_key, columns |
+| `Registry` | repo, source_repo, updated_at, datasets, marts, signals, entities, gcs_prefix, clean_layout |
+| `Dataset` | slug, name, description, period, columns, location, mart_refs, partitions, last_run (+ `years`, `clean_rows`) |
+| `Mart` | slug, dataset, table, layout, year, location, primary_key |
 | `Signal` | id, status (ok/warn/error), detail, run |
 | `Run` | run_id, year, status, quality_score, duration_seconds |
 | `Column` | name, type, role, semantic_type |
@@ -460,7 +466,7 @@ from lab_connectors.registry import (
 | Funzione | Cosa fa |
 |---|---|
 | `year_range(registry, *, slug=None, local_root=None)` | Tutti gli anni del `period` (non solo start/end), con filtro opzionale sui file locali |
-| `published_years(registry, slug, *, probe=None)` | Anni con partizione presente su GCS (path puntuale senza rete; glob verificato con HEAD) |
+| `published_years(registry, slug, *, probe=None)` | Anni con partizione pubblicata: da `partitions` (v2, nessuna rete) o da path/HEAD (v1) |
 | `latest_published_year(registry, slug, *, prefix=None, probe=None)` | Anno più recente pubblicato (fallback HEAD su `clean_parquet`); `None` se non c'è nessuna partizione |
 | `to_url_slug(slug)` | Slug interno → slug URL pubblico Explorer (override editoriali inclusi) |
 

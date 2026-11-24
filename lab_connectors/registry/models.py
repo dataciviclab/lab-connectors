@@ -1,4 +1,11 @@
-"""Dataclass che modellano lo schema registry (ADR-001, v1).
+"""Dataclass che modellano lo schema registry (v1 e v2).
+
+``Registry.from_dict`` è l'unico punto di compatibilità tra le versioni del
+contratto: legge sia ``schema_version: 1`` (location scritte voce per voce,
+sezione ``signals``) sia ``schema_version: 2`` (contratto ``gcs`` + ``partitions``
++ ``last_run``, senza ``signals``/``entities``) e espone agli consumer la stessa
+superficie dataclass. Per v2 le ``location`` sono sintetizzate da
+``lab_connectors.registry.locations``.
 
 Usage::
 
@@ -6,7 +13,7 @@ Usage::
 
     reg = Registry.from_dict(data)
     for ds in reg.datasets:
-        print(ds.slug, ds.period)
+        print(ds.slug, ds.period, ds.clean_rows)
 """
 
 from __future__ import annotations
@@ -70,10 +77,28 @@ class Dataset:
     location: Location = field(default_factory=Location)
     stage: str = ""
     mart_refs: list[str] = field(default_factory=list)
+    partitions: dict[int, int] = field(default_factory=dict)
+    last_run: Run | None = None
+
+    @property
+    def years(self) -> list[int]:
+        """Chiavi di partizione pubblicate (anno o legislatura), ordinate."""
+        return sorted(self.partitions)
+
+    @property
+    def clean_rows(self) -> int | None:
+        """Righe clean totali (somma delle partizioni); None se non note."""
+        if not self.partitions:
+            return None
+        return sum(self.partitions.values())
 
     @classmethod
     def from_dict(cls, d: dict) -> Dataset:
-        """Parse from dict."""
+        """Parse from dict (v1 o v2)."""
+        location = d.get("location")
+        if isinstance(location, str):
+            location = {"path": location}
+        last_run = d.get("last_run")
         return cls(
             slug=d.get("slug", ""),
             name=d.get("name", ""),
@@ -84,9 +109,15 @@ class Dataset:
             tags=d.get("tags", []),
             category=d.get("category", ""),
             columns=[Column.from_dict(c) for c in d.get("columns", [])],
-            location=Location.from_dict(d.get("location", {})),
+            location=Location.from_dict(location or {}),
             stage=d.get("stage", ""),
             mart_refs=d.get("mart_refs", []),
+            partitions={
+                int(key): int(value)
+                for key, value in (d.get("partitions") or {}).items()
+                if str(key).lstrip("-").isdigit() and value is not None
+            },
+            last_run=Run.from_dict(last_run) if last_run else None,
         )
 
 
@@ -97,28 +128,25 @@ class Mart:
     slug: str = ""
     dataset: str = ""
     table: str = ""
-    name: str = ""
-    description: str = ""
+    layout: str = "flat"
+    year: int | None = None
     location: Location = field(default_factory=Location)
     primary_key: list[str] = field(default_factory=list)
-    required_columns: list[str] = field(default_factory=list)
-    min_rows: int | None = None
-    columns: list[Column] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict) -> Mart:
-        """Parse from dict."""
+        """Parse from dict (v1 o v2)."""
+        location = d.get("location")
+        if isinstance(location, str):
+            location = {"path": location}
         return cls(
             slug=d.get("slug", ""),
             dataset=d.get("dataset", ""),
             table=d.get("table", ""),
-            name=d.get("name", ""),
-            description=d.get("description", ""),
-            location=Location.from_dict(d.get("location", {})),
+            layout=d.get("layout", "flat"),
+            year=d.get("year"),
+            location=Location.from_dict(location or {}),
             primary_key=d.get("primary_key", []),
-            required_columns=d.get("required_columns", []),
-            min_rows=d.get("min_rows"),
-            columns=[Column.from_dict(c) for c in d.get("columns", [])],
         )
 
 
@@ -139,7 +167,11 @@ class Run:
 
     @classmethod
     def from_dict(cls, d: dict) -> Run:
-        """Parse from dict."""
+        """Parse from dict.
+
+        Accetta anche il blocco ``last_run`` v2 (``at``/``year``/``status``):
+        ``at`` è l'istante di avvio della run, esposto qui come ``started_at``.
+        """
         return cls(
             run_id=d.get("run_id", ""),
             year=d.get("year"),
@@ -147,7 +179,7 @@ class Run:
             quality_score=d.get("quality_score", {}),
             output_rows=d.get("output_rows", {}),
             output_bytes=d.get("output_bytes", {}),
-            started_at=d.get("started_at", ""),
+            started_at=d.get("started_at") or d.get("at", ""),
             finished_at=d.get("finished_at", ""),
             updated_at=d.get("updated_at", ""),
             duration_seconds=d.get("duration_seconds"),
@@ -183,7 +215,7 @@ class Signal:
 
 @dataclass
 class Registry:
-    """Registry completo di un repo."""
+    """Registry completo di un repo (v1 o v2)."""
 
     schema_version: int = 1
     repo: str = ""
@@ -194,12 +226,16 @@ class Registry:
     signals: list[Signal] = field(default_factory=list)
     codelists: list = field(default_factory=list)
     entities: dict = field(default_factory=dict)
+    checks: list = field(default_factory=list)
+    gcs_prefix: str = ""
+    clean_layout: str = "year"
 
     @classmethod
     def from_dict(cls, d: dict) -> Registry:
-        """Parse from dict."""
-        return cls(
-            schema_version=d.get("schema_version", 1),
+        """Parse from dict, normalizzando v1 e v2 alla stessa superficie."""
+        gcs = d.get("gcs") or {}
+        registry = cls(
+            schema_version=int(d.get("schema_version") or 1),
             repo=d.get("repo", ""),
             source_repo=d.get("source_repo", ""),
             updated_at=d.get("updated_at", ""),
@@ -208,12 +244,42 @@ class Registry:
             signals=[Signal.from_dict(s) for s in d.get("signals", [])],
             codelists=d.get("codelists", []),
             entities=d.get("entities", {}),
+            checks=d.get("checks", []),
+            gcs_prefix=gcs.get("prefix", ""),
+            clean_layout=gcs.get("clean", "year"),
         )
+        if registry.schema_version >= 2:
+            registry._derive_locations()
+        return registry
+
+    def _derive_locations(self) -> None:
+        """Sintetizza le ``location`` v2 assenti dal contratto ``gcs``."""
+        from lab_connectors.registry.locations import clean_location, mart_location
+
+        for ds in self.datasets:
+            if ds.location.path or not ds.partitions:
+                continue
+            location = clean_location(self.gcs_prefix, self.clean_layout, ds.slug, ds.partitions)
+            if location:
+                ds.location = Location.from_dict(location)
+        for mart in self.marts:
+            if mart.location.path:
+                continue
+            mart.location = Location.from_dict(
+                mart_location(
+                    self.gcs_prefix,
+                    mart.dataset,
+                    mart.table,
+                    mart.layout or "flat",
+                    year=mart.year,
+                )
+            )
 
     def prefix_for_slug(self, slug: str) -> str:
         """Estrae il GCS prefix da un dataset registrato.
 
-        Il prefix è la parte di path tra il bucket e lo slug nella
+        v2: il prefix è dichiarato una volta sola in ``gcs.prefix``.
+        v1 (fallback): è la parte di path tra il bucket e lo slug nella
         ``location.path`` del dataset. Se il dataset non ha ``location.path``
         o il path non contiene uno slug riconoscibile, restituisce ``""``.
 
@@ -224,6 +290,8 @@ class Registry:
             # → "appalti_pubblici/"
 
         """
+        if self.gcs_prefix:
+            return self.gcs_prefix
         for ds in self.datasets:
             if ds.slug != slug:
                 continue
