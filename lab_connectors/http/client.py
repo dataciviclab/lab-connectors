@@ -25,7 +25,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -84,6 +84,30 @@ class _SimpleResponse:
         import json as _json
 
         return _json.loads(self._content)
+
+    def iter_content(
+        self,
+        chunk_size: int | None = 65536,
+        decode_unicode: bool = False,
+    ) -> Iterator[bytes | str]:
+        """Legge il body a chunk, come ``requests.Response.iter_content``.
+
+        ``chunk_size=None`` restituisce tutto in un chunk; ``decode_unicode``
+        decodifica con l'encoding della risposta. Il fallback curl/urllib
+        restituisce il body già in memoria: qui lo si espone a chunk per i
+        consumer che leggono in streaming (es.
+        ``toolkit.scout.http.fetch_content``).
+        """
+        if chunk_size is None:
+            size = max(len(self._content), 1)
+        else:
+            size = max(int(chunk_size), 1)
+        for i in range(0, len(self._content), size):
+            chunk = self._content[i : i + size]
+            if decode_unicode:
+                yield chunk.decode(self._encoding, errors="replace")
+            else:
+                yield chunk
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
