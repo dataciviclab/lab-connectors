@@ -459,3 +459,21 @@ def test_fallback_chain_all_fail(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.is_error
     assert result.ssl_fallback_used is False
+
+
+@pytest.mark.pure_unit
+def test_simple_response_iter_content() -> None:
+    """_SimpleResponse espone iter_content come requests.Response.
+
+    Il fallback proxy/curl restituisce _SimpleResponse: i consumer che
+    leggono in streaming (toolkit.scout.http.fetch_content) devono poter
+    iterare il body, altrimenti il dataset fallisce con AttributeError.
+    """
+    from lab_connectors.http.client import _SimpleResponse
+
+    resp = _SimpleResponse(b"abcdefgh")
+    assert list(resp.iter_content(chunk_size=3)) == [b"abc", b"def", b"gh"]
+    assert b"".join(resp.iter_content(chunk_size=65536)) == b"abcdefgh"
+    assert list(resp.iter_content(chunk_size=10)) == [b"abcdefgh"]
+    assert list(resp.iter_content(chunk_size=None)) == [b"abcdefgh"]
+    assert list(resp.iter_content(chunk_size=3, decode_unicode=True)) == ["abc", "def", "gh"]
