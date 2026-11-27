@@ -13,7 +13,7 @@ class ResponseLike(Protocol):
     """Minimal response surface condivisa tra ``requests.Response`` e test stub.
 
     Copre gli attributi letti dai consumer di ``HttpResult``:
-    ``status_code``, ``headers``, ``text``, ``content``,
+    ``status_code``, ``headers``, ``text``, ``content``, ``.iter_content()``,
     ``.json()``, ``.raise_for_status()``, ``ok``, ``url``, ``reason``.
     """
 
@@ -39,6 +39,9 @@ class ResponseLike(Protocol):
 
     def raise_for_status(self) -> None:
         """Raise HTTPError if status_code >= 400."""
+
+    def iter_content(self, chunk_size: int = 65536, decode_unicode: bool = False) -> Any:
+        """Itera il body a chunk (``requests.Response`` e stub lo espongono)."""
 
 
 @dataclass

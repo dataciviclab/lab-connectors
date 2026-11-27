@@ -251,6 +251,29 @@ def object_exists(bucket: str, key: str) -> bool:
     return status is not None and status < 400
 
 
+def object_generation(bucket: str, key: str) -> str | None:
+    """Restituisce la generation immutabile di un oggetto GCS (None se non ottenibile).
+
+    La ``generation`` cambia a ogni riscrittura dell'oggetto: è la chiave
+    giusta per una cache su disco, perché non può servire contenuto vecchio.
+
+    Usa ``HttpClient`` (stessa catena di fallback TLS/proxy del resto del
+    modulo) e legge solo l'header: nessun byte di dato.
+    """
+    from urllib.parse import quote
+
+    from lab_connectors.http import HttpClient
+
+    url = f"https://storage.googleapis.com/{quote(bucket, safe='')}/{quote(key, safe='/_-.')}"
+    result = HttpClient(timeout=20, max_retries=1).head(url)
+    response = result.response
+    if response is None or response.status_code >= 400:
+        return None
+    headers = response.headers or {}
+    value = headers.get("x-goog-generation") or headers.get("X-Goog-Generation")
+    return str(value) if value else None
+
+
 def check_public(url: str) -> dict[str, Any]:
     """Verifica se un URL pubblico GCS è raggiungibile.
 
