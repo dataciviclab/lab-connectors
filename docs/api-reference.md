@@ -321,6 +321,30 @@ with safe_connect("path/to/db.duckdb", extensions=["httpfs", "spatial"]) as con:
     con.execute("SELECT * FROM spatial_table")
 ```
 
+### Identità del client — `DCL_CLIENT_NAME`
+
+Ogni connessione dichiara chi sta leggendo, nei usage log di GCS. Senza, tutte
+le letture del Lab risultano `duckdb/vX python/3.12`: build, dashboard, MCP e
+script diventano indistinguibili e l'egress non è attribuibile.
+
+```bash
+export DCL_CLIENT_NAME="dcl-toolkit/0.4.1"   # default: dcl-unknown/0
+```
+
+| | |
+|---|---|
+| Variabile | `DCL_CLIENT_NAME` |
+| Default | `dcl-unknown/0` (l'anonimato resta visibile e contabile) |
+| Formato | `^[A-Za-z0-9][A-Za-z0-9._/-]{0,80}$`; valori non conformi cadono sul default |
+| Effetto | `custom_user_agent` della connessione DuckDB (non modificabile dopo l'apertura: va nel `config` di `connect`) |
+
+Convenzione per strumento: `dcl-toolkit/<versione>`, `dcl-mcp/<versione>`,
+`dcl-lab-dashboard/<versione>`, `dcl-explorer-build/<versione>`.
+
+Chi crea `duckdb.connect()` a mano (script, agenti) non passa da
+`safe_connect`: deve impostare `custom_user_agent` da sé, altrimenti resta
+`duckdb/vX …`.
+
 ### `gcs_connect()` — connessione ottimizzata per GCS
 
 Context manager per leggere parquet da GCS:
