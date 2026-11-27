@@ -29,6 +29,7 @@ Uso::
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -59,10 +60,29 @@ _DEFAULT_MEMORY_LIMIT = "2GB"
 _THREADS_ENV = "DUCKDB_THREADS"
 _PRESERVE_ORDER_ENV = "DUCKDB_PRESERVE_INSERTION_ORDER"
 
+# Identità del client nei usage log di GCS: senza, ogni strumento del Lab
+# scrive `duckdb/vX python/3.12` e non si distingue una build dell'Explorer
+# da una dashboard, dall'MCP o da uno script. Il valore va in
+# `custom_user_agent` (si può impostare solo alla connessione, non con SET).
+_CLIENT_NAME_ENV = "DCL_CLIENT_NAME"
+_DEFAULT_CLIENT_NAME = "dcl-unknown/0"
+_CLIENT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,80}$")
+
+
+def client_name() -> str:
+    """Nome del client per i usage log GCS (``DCL_CLIENT_NAME``).
+
+    Valori non conformi (spazi, virgolette, caratteri di controllo) cadono sul
+    default: l'env non deve poter rompere la connessione né iniettare testo
+    nell'header.
+    """
+    raw = (os.environ.get(_CLIENT_NAME_ENV) or "").strip()
+    return raw if _CLIENT_NAME_RE.match(raw) else _DEFAULT_CLIENT_NAME
+
 
 def _default_config() -> dict[str, str]:
     limit = os.environ.get(_MEMORY_LIMIT_ENV, _DEFAULT_MEMORY_LIMIT)
-    return {"memory_limit": limit}
+    return {"memory_limit": limit, "custom_user_agent": client_name()}
 
 
 def _apply_env_settings(con: duckdb.DuckDBPyConnection) -> None:
@@ -84,7 +104,8 @@ def safe_connect(
     """Context manager per connessioni DuckDB.
 
     Applica la config di default (``memory_limit`` da ``DUCKDB_MEMORY_LIMIT``
-    o ``'2GB'``) e ``PRAGMA disable_progress_bar``.
+    o ``'2GB'``, e ``custom_user_agent`` da ``DCL_CLIENT_NAME``) e
+    ``PRAGMA disable_progress_bar``.
 
     Args:
         database: Path al database o ``":memory:"`` (default).

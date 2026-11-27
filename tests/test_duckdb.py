@@ -273,3 +273,42 @@ class TestGcsConnect:
                 assert row is not None and row[0] > 0
         except duckdb.IOException:
             pytest.skip("GCS HTTP endpoint not reachable from this runner")
+
+
+class TestClientName:
+    """`DCL_CLIENT_NAME` → custom_user_agent nei usage log GCS.
+
+    Regressione storica: senza identità per strumento, tutti i lettori del Lab
+    risultano `duckdb/vX python/3.12`, e attribuire l'egress (Explorer vs
+    dashboard vs MCP) diventa impossibile — è successo, e ha portato a
+    un'attribuzione sbagliata di 6,9 GB.
+    """
+
+    def test_default_senza_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("DCL_CLIENT_NAME", raising=False)
+        with safe_connect(":memory:") as con:
+            value = con.execute("SELECT current_setting('custom_user_agent')").fetchone()
+        assert value and value[0] == "dcl-unknown/0"
+
+    def test_valore_da_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("DCL_CLIENT_NAME", "dcl-explorer-build/1.0")
+        with safe_connect(":memory:") as con:
+            value = con.execute("SELECT current_setting('custom_user_agent')").fetchone()
+        assert value and value[0] == "dcl-explorer-build/1.0"
+
+    @pytest.mark.parametrize("bad", ["", "   ", "con spazi", "quote'inside", "a;drop", "x" * 200])
+    def test_valore_non_conforme_cade_sul_default(
+        self, monkeypatch: pytest.MonkeyPatch, bad: str
+    ) -> None:
+        monkeypatch.setenv("DCL_CLIENT_NAME", bad)
+        with safe_connect(":memory:") as con:
+            value = con.execute("SELECT current_setting('custom_user_agent')").fetchone()
+        assert value and value[0] == "dcl-unknown/0"
+
+    def test_client_name_helper(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from lab_connectors.duckdb.core import client_name
+
+        monkeypatch.setenv("DCL_CLIENT_NAME", "dcl-mcp/1.0")
+        assert client_name() == "dcl-mcp/1.0"
+        monkeypatch.delenv("DCL_CLIENT_NAME")
+        assert client_name() == "dcl-unknown/0"
