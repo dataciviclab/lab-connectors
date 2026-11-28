@@ -1,0 +1,18 @@
+{
+  "note": "copia verificata degli asset canonici di lab-ops; non modificare qui",
+  "canonical": "infra/lab-ops/standards/assets/logo",
+  "files": {
+    "symbol.svg": {
+      "sha256": "a74a05b6a76bf87df44a0d738581782c2160112973a472891370468a551696a7",
+      "source": "infra/lab-ops/standards/assets/logo/symbol.svg"
+    },
+    "symbol-on-dark.svg": {
+      "sha256": "8428055208b74ca2c0e9be2318cb5e255e2fe65e4a112aacb313d02c2a2c4b0e",
+      "source": "infra/lab-ops/standards/assets/logo/symbol-on-dark.svg"
+    },
+    "favicon.svg": {
+      "sha256": "8901c044f68237ada367c8df656e44664358d5e1320644c283e45a11082b071d",
+      "source": "infra/lab-ops/standards/assets/logo/favicon.svg"
+    }
+  }
+}

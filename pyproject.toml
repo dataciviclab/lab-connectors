@@ -46,6 +46,7 @@ include = ["lab_connectors", "lab_connectors.*"]
 
 [tool.setuptools.package-data]
 "lab_connectors.gcs" = ["paths.json"]
+"lab_connectors" = ["assets/brand/*.svg", "assets/brand/*.json", "py.typed"]
 
 [tool.ruff]
 line-length = 100
